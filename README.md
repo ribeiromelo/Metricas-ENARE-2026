@@ -2,7 +2,9 @@
 
 Sistema inteligente de estudos para **ENARE/REVALIDA/ENAMED** com revisão espaçada adaptativa.
 
-**🆕 NOVIDADE**: Sistema preparado para **multi-usuários** com metas flexíveis (4h/3h/2h)! 
+**🆕 NOVIDADE**: Sistema preparado para **multi-usuários** com metas flexíveis (4h/3h/2h)!
+
+**📦 GitHub**: [ribeiromelo/Metricas-ENARE-2026](https://github.com/ribeiromelo/Metricas-ENARE-2026) 
 
 ---
 
