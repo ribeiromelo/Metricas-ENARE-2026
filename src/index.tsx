@@ -320,10 +320,12 @@ app.post('/api/estudo/registrar', async (c) => {
     // Calcular intervalos de revisão
     const intervalos = calcularIntervalos(tema.prevalencia_numero, acuracia)
 
-    // Criar revisões
+    // Criar revisões com intervalos cumulativos
+    let diasAcumulados = 0
     for (let i = 0; i < intervalos.length; i++) {
+      diasAcumulados += intervalos[i]
       const dataAgendada = new Date()
-      dataAgendada.setDate(dataAgendada.getDate() + intervalos[i])
+      dataAgendada.setDate(dataAgendada.getDate() + diasAcumulados)
       
       await DB.prepare(`
         INSERT INTO revisoes (estudo_id, tema_id, numero_revisao, data_agendada, intervalo_dias)
@@ -443,10 +445,12 @@ app.post('/api/revisao/concluir/:id', async (c) => {
       revisaoAtual.numero_revisao
     )
 
-    // Criar novas revisões
+    // Criar novas revisões com intervalos cumulativos a partir de hoje
+    let diasAcumulados = 0
     for (let i = 0; i < intervalos.length; i++) {
+      diasAcumulados += intervalos[i]
       const dataAgendada = new Date()
-      dataAgendada.setDate(dataAgendada.getDate() + intervalos[i])
+      dataAgendada.setDate(dataAgendada.getDate() + diasAcumulados)
       
       await DB.prepare(`
         INSERT INTO revisoes (estudo_id, tema_id, numero_revisao, data_agendada, intervalo_dias)
@@ -1144,42 +1148,57 @@ app.get('/', async (c) => {
 
         // Concluir revisão
         async function concluirRevisao(revisaoId, temaId, temaNome, prevalencia) {
-          // Verificar data antes de prosseguir
-          const hoje = new Date()
-          hoje.setHours(0, 0, 0, 0)
+          // Usar confirm do Modal para escolher método
+          const overlay = document.createElement('div')
+          overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
           
-          // Modal de seleção de método
-          Modal.show({
-            title: 'Método de Revisão',
-            content: \`
-              <p class="text-gray-700 mb-4">Como você revisou o tema "<strong>\${temaNome}</strong>"?</p>
+          overlay.innerHTML = \`
+            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+              <div class="flex items-start space-x-4 mb-6">
+                <div class="flex-shrink-0">
+                  <i class="fas fa-question-circle text-indigo-500 text-4xl"></i>
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold text-gray-900 mb-2">Método de Revisão</h3>
+                  <p class="text-gray-600">Como você revisou o tema "<strong>\${temaNome}</strong>"?</p>
+                </div>
+              </div>
               <div class="space-y-3">
-                <button id="metodo-questoes" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                <button id="btn-questoes" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition">
                   <i class="fas fa-question-circle mr-2"></i>Questões
                 </button>
-                <button id="metodo-flashcard" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                <button id="btn-flashcard" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition">
                   <i class="fas fa-layer-group mr-2"></i>FlashCards ou Outro Método
                 </button>
+                <button id="btn-cancelar" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold transition">
+                  Cancelar
+                </button>
               </div>
-            \`,
-            type: 'question',
-            buttons: [
-              { label: 'Cancelar', primary: false, callback: () => {} }
-            ]
-          })
+            </div>
+          \`
           
-          // Adicionar event listeners após o modal aparecer
-          setTimeout(() => {
-            document.getElementById('metodo-questoes')?.addEventListener('click', () => {
-              document.body.querySelector('.fixed.inset-0').remove()
-              revisarPorQuestoes(revisaoId, temaId, prevalencia)
-            })
-            
-            document.getElementById('metodo-flashcard')?.addEventListener('click', () => {
-              document.body.querySelector('.fixed.inset-0').remove()
-              revisarPorFlashcard(revisaoId, temaId, prevalencia)
-            })
-          }, 100)
+          document.body.appendChild(overlay)
+          
+          // Event listeners
+          document.getElementById('btn-questoes').onclick = () => {
+            document.body.removeChild(overlay)
+            revisarPorQuestoes(revisaoId, temaId, prevalencia)
+          }
+          
+          document.getElementById('btn-flashcard').onclick = () => {
+            document.body.removeChild(overlay)
+            revisarPorFlashcard(revisaoId, temaId, prevalencia)
+          }
+          
+          document.getElementById('btn-cancelar').onclick = () => {
+            document.body.removeChild(overlay)
+          }
+          
+          overlay.onclick = (e) => {
+            if (e.target === overlay) {
+              document.body.removeChild(overlay)
+            }
+          }
         }
         
         // Revisar por questões
@@ -1226,74 +1245,89 @@ app.get('/', async (c) => {
         
         // Revisar por flashcard
         async function revisarPorFlashcard(revisaoId, temaId, prevalencia) {
-          Modal.show({
-            title: 'Grau de Dificuldade',
-            content: \`
-              <p class="text-gray-700 mb-4">Qual foi seu grau de dificuldade nesta revisão?</p>
+          const overlay = document.createElement('div')
+          overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
+          
+          overlay.innerHTML = \`
+            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+              <div class="flex items-start space-x-4 mb-6">
+                <div class="flex-shrink-0">
+                  <i class="fas fa-question-circle text-purple-500 text-4xl"></i>
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold text-gray-900 mb-2">Grau de Dificuldade</h3>
+                  <p class="text-gray-600">Qual foi seu grau de dificuldade nesta revisão?</p>
+                </div>
+              </div>
               <div class="space-y-3">
-                <button id="dificuldade-facil" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                <button id="btn-facil" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition">
                   <i class="fas fa-smile mr-2"></i>Fácil - Domino bem o tema
                 </button>
-                <button id="dificuldade-medio" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                <button id="btn-medio" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-semibold transition">
                   <i class="fas fa-meh mr-2"></i>Médio - Lembro com esforço
                 </button>
-                <button id="dificuldade-dificil" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                <button id="btn-dificil" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition">
                   <i class="fas fa-frown mr-2"></i>Difícil - Preciso revisar mais
                 </button>
+                <button id="btn-cancelar-flash" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold transition">
+                  Cancelar
+                </button>
               </div>
-            \`,
-            type: 'question',
-            buttons: [
-              { label: 'Cancelar', primary: false, callback: () => {} }
-            ]
-          })
+            </div>
+          \`
           
-          setTimeout(() => {
-            const processarDificuldade = async (dificuldade) => {
-              document.body.querySelector('.fixed.inset-0')?.remove()
-              
-              // Mapear dificuldade para acurácia equivalente
-              const acuraciaMap = {
-                'facil': 90,
-                'medio': 70,
-                'dificil': 50
-              }
-              
-              try {
-                const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    acuracia_revisao: acuraciaMap[dificuldade],
-                    metodo: 'flashcard',
-                    dificuldade: dificuldade,
-                    tema_id: temaId,
-                    prevalencia_numero: prevalencia
-                  })
-                })
-
-                const data = await res.json()
-                if (data.success) {
-                  const msgs = {
-                    'facil': 'Revisão concluída! Você domina este tema. Intervalos mais longos aplicados. 😊',
-                    'medio': 'Revisão concluída! Continue praticando. Intervalos moderados mantidos. 📚',
-                    'dificil': 'Revisão concluída! Vamos revisar mais vezes este tema. Intervalos reduzidos. 💪'
-                  }
-                  
-                  await Modal.alert('Sucesso!', msgs[dificuldade], 'success')
-                  loadDashboard()
-                } else {
-                  await Modal.alert('Erro', data.error, 'error')
-                }
-              } catch (error) {
-                await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
-              }
+          document.body.appendChild(overlay)
+          
+          const processarDificuldade = async (dificuldade) => {
+            document.body.removeChild(overlay)
+            
+            const acuraciaMap = {
+              'facil': 90,
+              'medio': 70,
+              'dificil': 50
             }
             
-            document.getElementById('dificuldade-facil')?.addEventListener('click', () => processarDificuldade('facil'))
-            document.getElementById('dificuldade-medio')?.addEventListener('click', () => processarDificuldade('medio'))
-            document.getElementById('dificuldade-dificil')?.addEventListener('click', () => processarDificuldade('dificil'))
-          }, 100)
+            try {
+              const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  acuracia_revisao: acuraciaMap[dificuldade],
+                  metodo: 'flashcard',
+                  dificuldade: dificuldade,
+                  tema_id: temaId,
+                  prevalencia_numero: prevalencia
+                })
+              })
+
+              const data = await res.json()
+              if (data.success) {
+                const msgs = {
+                  'facil': 'Revisão concluída! Você domina este tema. Intervalos mais longos aplicados. 😊',
+                  'medio': 'Revisão concluída! Continue praticando. Intervalos moderados mantidos. 📚',
+                  'dificil': 'Revisão concluída! Vamos revisar mais vezes este tema. Intervalos reduzidos. 💪'
+                }
+                
+                await Modal.alert('Sucesso!', msgs[dificuldade], 'success')
+                loadDashboard()
+              } else {
+                await Modal.alert('Erro', data.error, 'error')
+              }
+            } catch (error) {
+              await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
+            }
+          }
+          
+          document.getElementById('btn-facil').onclick = () => processarDificuldade('facil')
+          document.getElementById('btn-medio').onclick = () => processarDificuldade('medio')
+          document.getElementById('btn-dificil').onclick = () => processarDificuldade('dificil')
+          document.getElementById('btn-cancelar-flash').onclick = () => document.body.removeChild(overlay)
+          
+          overlay.onclick = (e) => {
+            if (e.target === overlay) {
+              document.body.removeChild(overlay)
+            }
+          }
         }
 
         // Gerar ciclo
