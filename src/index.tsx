@@ -178,18 +178,24 @@ app.get('/api/semana/atual', async (c) => {
       return c.json({ error: 'Semana não encontrada' }, 404)
     }
 
-    // Buscar temas da semana
+    // CRITICAL FIX: Buscar temas da semana e verificar quais já foram estudados
+    // Adiciona coluna 'ja_estudado' (COUNT de estudos para cada tema)
     const temasResult = await DB.prepare(`
-      SELECT st.*, t.* 
+      SELECT st.*, t.*, 
+        (SELECT COUNT(*) FROM estudos e WHERE e.semana_tema_id = st.id) as ja_estudado
       FROM semana_temas st
       INNER JOIN temas t ON st.tema_id = t.id
       WHERE st.semana_id = ?
       ORDER BY st.ordem
     `).bind(semana.id).all()
 
+    // Filtrar para mostrar APENAS temas não estudados na homepage
+    const temasNaoEstudados = temasResult.results.filter((t: any) => t.ja_estudado === 0)
+
     return c.json({
       semana,
-      temas: temasResult.results
+      temas: temasNaoEstudados, // Apenas temas não estudados
+      todos_temas: temasResult.results // Todos os temas (para referência se necessário)
     })
 
   } catch (error: any) {
@@ -218,6 +224,41 @@ app.get('/api/semanas', async (c) => {
     `).all()
 
     return c.json({ semanas: semanasResult.results })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// ====================================================
+// API: OBTER TEMAS DE UMA SEMANA ESPECÍFICA
+// ====================================================
+app.get('/api/semana/:numero', async (c) => {
+  const { DB } = c.env
+  const numeroSemana = parseInt(c.req.param('numero'))
+  
+  try {
+    const semana = await DB.prepare(`
+      SELECT * FROM semanas 
+      WHERE numero_semana = ?
+    `).bind(numeroSemana).first()
+    
+    if (!semana) {
+      return c.json({ error: 'Semana não encontrada' }, 404)
+    }
+
+    const temasResult = await DB.prepare(`
+      SELECT st.*, t.* 
+      FROM semana_temas st
+      INNER JOIN temas t ON st.tema_id = t.id
+      WHERE st.semana_id = ?
+      ORDER BY st.ordem
+    `).bind(semana.id).all()
+
+    return c.json({
+      semana,
+      temas: temasResult.results
+    })
 
   } catch (error: any) {
     return c.json({ error: error.message }, 500)
@@ -617,6 +658,146 @@ app.get('/', (c) => {
 
         <script>
         // ====================================================
+        // SISTEMA DE MODAIS CUSTOMIZADOS
+        // ====================================================
+        class Modal {
+          static show(options) {
+            const { title, content, buttons = [], type = 'info' } = options;
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            overlay.style.animation = 'fadeIn 0.2s ease-out';
+            
+            const icons = {
+              info: '<i class="fas fa-info-circle text-blue-500 text-4xl"></i>',
+              success: '<i class="fas fa-check-circle text-green-500 text-4xl"></i>',
+              warning: '<i class="fas fa-exclamation-triangle text-yellow-500 text-4xl"></i>',
+              error: '<i class="fas fa-times-circle text-red-500 text-4xl"></i>',
+              question: '<i class="fas fa-question-circle text-indigo-500 text-4xl"></i>'
+            };
+            
+            overlay.innerHTML = \`
+              <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95" style="animation: scaleIn 0.2s ease-out forwards">
+                <div class="p-6">
+                  <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0">
+                      \${icons[type] || icons.info}
+                    </div>
+                    <div class="flex-1">
+                      <h3 class="text-xl font-bold text-gray-900 mb-2">\${title}</h3>
+                      <div class="text-gray-600">\${content}</div>
+                    </div>
+                  </div>
+                  <div class="flex justify-end space-x-3 mt-6">
+                    \${buttons.map((btn, i) => \`
+                      <button 
+                        data-btn-index="\${i}"
+                        class="\${btn.primary ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'} px-5 py-2 rounded-lg font-semibold transition"
+                      >
+                        \${btn.label}
+                      </button>
+                    \`).join('')}
+                  </div>
+                </div>
+              </div>
+            \`;
+            
+            document.body.appendChild(overlay);
+            
+            // Event listeners
+            overlay.querySelectorAll('button').forEach((btn, i) => {
+              btn.addEventListener('click', () => {
+                if (buttons[i].callback) buttons[i].callback();
+                document.body.removeChild(overlay);
+              });
+            });
+            
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+              if (e.target === overlay) {
+                document.body.removeChild(overlay);
+              }
+            });
+          }
+          
+          static alert(title, message, type = 'info') {
+            return new Promise((resolve) => {
+              Modal.show({
+                title,
+                content: message,
+                type,
+                buttons: [
+                  { label: 'OK', primary: true, callback: resolve }
+                ]
+              });
+            });
+          }
+          
+          static confirm(title, message, onConfirm, onCancel) {
+            Modal.show({
+              title,
+              content: message,
+              type: 'question',
+              buttons: [
+                { label: 'Cancelar', primary: false, callback: onCancel || (() => {}) },
+                { label: 'Confirmar', primary: true, callback: onConfirm || (() => {}) }
+              ]
+            });
+          }
+          
+          static input(title, placeholder, onSubmit, defaultValue = '') {
+            const inputId = 'modal-input-' + Date.now();
+            
+            Modal.show({
+              title,
+              content: \`
+                <input 
+                  id="\${inputId}" 
+                  type="text" 
+                  placeholder="\${placeholder}"
+                  value="\${defaultValue}"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mt-2"
+                />
+              \`,
+              type: 'question',
+              buttons: [
+                { label: 'Cancelar', primary: false, callback: () => {} },
+                { 
+                  label: 'Confirmar', 
+                  primary: true, 
+                  callback: () => {
+                    const input = document.getElementById(inputId);
+                    if (input && input.value.trim() && onSubmit) {
+                      onSubmit(input.value.trim());
+                    }
+                  }
+                }
+              ]
+            });
+            
+            // Focus input after modal renders
+            setTimeout(() => {
+              const input = document.getElementById(inputId);
+              if (input) input.focus();
+            }, 100);
+          }
+        }
+        
+        // Adicionar animações CSS
+        const modalStyles = document.createElement('style');
+        modalStyles.textContent = \`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+          }
+        \`;
+        document.head.appendChild(modalStyles);
+        
+        // ====================================================
         // FRONTEND JAVASCRIPT
         // ====================================================
         
@@ -705,82 +886,90 @@ app.get('/', (c) => {
 
         // Registrar estudo
         async function registrarEstudo(temaId, semanaTemaId) {
-          const questoes = prompt('Quantas questões você fez?', '15')
-          if (!questoes) return
+          Modal.input('Quantas questões você fez?', 'Ex: 15', async (questoes) => {
+            if (!questoes) return;
+            
+            Modal.input('Quantas você acertou?', 'Ex: 12', async (acertos) => {
+              if (!acertos) return;
+              
+              Modal.input('Tempo em minutos?', 'Ex: 60', async (tempo) => {
+                if (!tempo) return;
+                
+                try {
+                  const res = await fetch('/api/estudo/registrar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      tema_id: temaId,
+                      semana_tema_id: semanaTemaId,
+                      metodo: 'questoes',
+                      questoes_feitas: parseInt(questoes),
+                      questoes_acertos: parseInt(acertos),
+                      tempo_minutos: parseInt(tempo)
+                    })
+                  })
 
-          const acertos = prompt('Quantas você acertou?', '12')
-          if (!acertos) return
-
-          const tempo = prompt('Tempo em minutos?', '60')
-          if (!tempo) return
-
-          try {
-            const res = await fetch('/api/estudo/registrar', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tema_id: temaId,
-                semana_tema_id: semanaTemaId,
-                metodo: 'questoes',
-                questoes_feitas: parseInt(questoes),
-                questoes_acertos: parseInt(acertos),
-                tempo_minutos: parseInt(tempo)
-              })
-            })
-
-            const data = await res.json()
-            if (data.success) {
-              alert('Estudo registrado! Acurácia: ' + data.acuracia.toFixed(1) + '%')
-              loadDashboard()
-            } else {
-              alert('Erro: ' + data.error)
-            }
-          } catch (error) {
-            alert('Erro ao registrar estudo')
-          }
+                  const data = await res.json()
+                  if (data.success) {
+                    await Modal.alert('Sucesso!', 'Estudo registrado! Acurácia: ' + data.acuracia.toFixed(1) + '%', 'success')
+                    loadDashboard()
+                  } else {
+                    await Modal.alert('Erro', data.error, 'error')
+                  }
+                } catch (error) {
+                  await Modal.alert('Erro', 'Erro ao registrar estudo', 'error')
+                }
+              }, '60')
+            }, '12')
+          }, '15')
         }
 
         // Concluir revisão
         async function concluirRevisao(revisaoId) {
-          const acuracia = prompt('Qual foi sua acurácia na revisão? (0-100)', '80')
-          if (!acuracia) return
+          Modal.input('Qual foi sua acurácia na revisão?', 'Digite 0-100', async (acuracia) => {
+            if (!acuracia) return;
 
-          try {
-            const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ acuracia_revisao: parseFloat(acuracia) })
-            })
+            try {
+              const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acuracia_revisao: parseFloat(acuracia) })
+              })
 
-            const data = await res.json()
-            if (data.success) {
-              alert('Revisão concluída!')
-              loadDashboard()
-            } else {
-              alert('Erro: ' + data.error)
+              const data = await res.json()
+              if (data.success) {
+                await Modal.alert('Sucesso!', 'Revisão concluída!', 'success')
+                loadDashboard()
+              } else {
+                await Modal.alert('Erro', data.error, 'error')
+              }
+            } catch (error) {
+              await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
             }
-          } catch (error) {
-            alert('Erro ao concluir revisão')
-          }
+          }, '80')
         }
 
         // Gerar ciclo
         async function gerarCiclo() {
-          if (!confirm('Gerar o ciclo de 40 semanas? Esta operação só pode ser feita uma vez.')) return
-
-          try {
-            const res = await fetch('/api/ciclo/gerar', { method: 'POST' })
-            const data = await res.json()
-            
-            if (data.success) {
-              alert('Ciclo gerado com sucesso! ' + data.semanas + ' semanas criadas.')
-              loadSemanas()
-            } else {
-              alert('Erro: ' + data.error)
+          Modal.confirm(
+            'Gerar Ciclo de 40 Semanas', 
+            'Esta operação distribuirá 419 temas em 40 semanas. Só pode ser feita uma vez!',
+            async () => {
+              try {
+                const res = await fetch('/api/ciclo/gerar', { method: 'POST' })
+                const data = await res.json()
+                
+                if (data.success) {
+                  await Modal.alert('Sucesso!', 'Ciclo gerado com sucesso! ' + data.semanas + ' semanas criadas.', 'success')
+                  loadSemanas()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                await Modal.alert('Erro', 'Erro ao gerar ciclo', 'error')
+              }
             }
-          } catch (error) {
-            alert('Erro ao gerar ciclo')
-          }
+          )
         }
 
         // Carregar semanas
@@ -792,10 +981,14 @@ app.get('/', (c) => {
             const mapaDiv = document.getElementById('mapa-semanas')
             if (data.semanas && data.semanas.length > 0) {
               mapaDiv.innerHTML = data.semanas.map(s => \`
-                <div class="border rounded-lg p-4 \${s.concluida ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200'}">
+                <div 
+                  class="border rounded-lg p-4 cursor-pointer hover:shadow-lg transition \${s.concluida ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:border-indigo-400'}"
+                  onclick="verTemasDaSemana(\${s.numero_semana})"
+                >
                   <h3 class="font-bold text-gray-800">Semana \${s.numero_semana}</h3>
                   <p class="text-sm text-gray-600">\${s.total_temas || 0} temas</p>
                   <p class="text-xs text-gray-500 mt-2">\${s.temas_concluidos || 0}/\${s.total_temas || 0} concluídos</p>
+                  <p class="text-xs text-indigo-600 mt-2"><i class="fas fa-eye mr-1"></i>Clique para ver temas</p>
                 </div>
               \`).join('')
             } else {
@@ -803,6 +996,50 @@ app.get('/', (c) => {
             }
           } catch (error) {
             console.error('Erro ao carregar semanas:', error)
+          }
+        }
+        
+        // Ver temas de uma semana específica
+        async function verTemasDaSemana(numeroSemana) {
+          try {
+            const res = await fetch(\`/api/semana/\${numeroSemana}\`)
+            const data = await res.json()
+            
+            if (data.temas && data.temas.length > 0) {
+              const temasHTML = data.temas.map(t => \`
+                <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
+                  <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
+                  <p class="text-sm text-gray-600">\${t.area} · \${t.prevalencia}</p>
+                  <p class="text-xs text-gray-500 mt-1">\${t.subtopicos || ''}</p>
+                  <div class="flex items-center justify-between mt-2">
+                    <span class="text-xs text-indigo-600"><i class="fas fa-clock mr-1"></i>\${t.meta_tempo_minutos} min · \${t.meta_questoes} questões</span>
+                    <span class="text-xs font-semibold \${t.metodo === 'questoes' ? 'text-green-600' : 'text-blue-600'}">
+                      <i class="fas \${t.metodo === 'questoes' ? 'fa-question-circle' : 'fa-book'} mr-1"></i>
+                      \${t.metodo === 'questoes' ? 'Questões' : 'Teoria'}
+                    </span>
+                  </div>
+                </div>
+              \`).join('')
+              
+              Modal.show({
+                title: \`Semana \${numeroSemana} - Temas para Estudar\`,
+                content: \`
+                  <div class="max-h-96 overflow-y-auto space-y-3">
+                    \${temasHTML}
+                  </div>
+                  <p class="text-sm text-gray-600 mt-4">Total: \${data.temas.length} temas</p>
+                \`,
+                type: 'info',
+                buttons: [
+                  { label: 'Fechar', primary: true, callback: () => {} }
+                ]
+              })
+            } else {
+              await Modal.alert('Sem Temas', 'Esta semana não possui temas cadastrados.', 'info')
+            }
+          } catch (error) {
+            console.error('Erro ao carregar temas da semana:', error)
+            await Modal.alert('Erro', 'Erro ao carregar temas da semana', 'error')
           }
         }
 
