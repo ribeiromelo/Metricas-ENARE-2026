@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Cérebro HardMed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full mx-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">🧠 Cérebro HardMed</h1>
+                <p class="text-gray-600">Sistema de Estudos para ENARE</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+                <button onclick="showTab('login')" id="btn-login" class="flex-1 py-2 px-4 rounded-md bg-white shadow text-indigo-600 font-semibold">
+                    Login
+                </button>
+                <button onclick="showTab('cadastro')" id="btn-cadastro" class="flex-1 py-2 px-4 rounded-md text-gray-600 font-semibold">
+                    Cadastro
+                </button>
+            </div>
+
+            <!-- Form Login -->
+            <form id="form-login" onsubmit="handleLogin(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" id="login-email" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                        <input type="password" id="login-senha" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition">
+                        Entrar
+                    </button>
+                </div>
+            </form>
+
+            <!-- Form Cadastro -->
+            <form id="form-cadastro" onsubmit="handleCadastro(event)" class="hidden">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                        <input type="text" id="cadastro-nome" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" id="cadastro-email" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                        <input type="password" id="cadastro-senha" required minlength="6" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Data da Prova (opcional)</label>
+                        <input type="date" id="cadastro-data-prova" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition">
+                        Criar Conta
+                    </button>
+                </div>
+            </form>
+
+            <div id="message" class="mt-4 text-center text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+    function showTab(tab) {
+        if (tab === 'login') {
+            document.getElementById('form-login').classList.remove('hidden')
+            document.getElementById('form-cadastro').classList.add('hidden')
+            document.getElementById('btn-login').classList.add('bg-white', 'shadow', 'text-indigo-600')
+            document.getElementById('btn-login').classList.remove('text-gray-600')
+            document.getElementById('btn-cadastro').classList.remove('bg-white', 'shadow', 'text-indigo-600')
+            document.getElementById('btn-cadastro').classList.add('text-gray-600')
+        } else {
+            document.getElementById('form-cadastro').classList.remove('hidden')
+            document.getElementById('form-login').classList.add('hidden')
+            document.getElementById('btn-cadastro').classList.add('bg-white', 'shadow', 'text-indigo-600')
+            document.getElementById('btn-cadastro').classList.remove('text-gray-600')
+            document.getElementById('btn-login').classList.remove('bg-white', 'shadow', 'text-indigo-600')
+            document.getElementById('btn-login').classList.add('text-gray-600')
+        }
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault()
+        const email = document.getElementById('login-email').value
+        const senha = document.getElementById('login-senha').value
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, senha })
+            })
+
+            const data = await res.json()
+
+            if (data.success) {
+                localStorage.setItem('auth_token', data.token)
+                showMessage('Login realizado! Redirecionando...', 'success')
+                setTimeout(() => window.location.href = '/', 1000)
+            } else {
+                showMessage(data.error || 'Erro ao fazer login', 'error')
+            }
+        } catch (error) {
+            showMessage('Erro ao conectar', 'error')
+        }
+    }
+
+    async function handleCadastro(e) {
+        e.preventDefault()
+        const nome = document.getElementById('cadastro-nome').value
+        const email = document.getElementById('cadastro-email').value
+        const senha = document.getElementById('cadastro-senha').value
+        const data_prova = document.getElementById('cadastro-data-prova').value
+
+        try {
+            const res = await fetch('/api/auth/cadastro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome, email, senha, data_prova })
+            })
+
+            const data = await res.json()
+
+            if (data.success) {
+                localStorage.setItem('auth_token', data.token)
+                showMessage('Conta criada! Redirecionando...', 'success')
+                setTimeout(() => window.location.href = '/', 1000)
+            } else {
+                showMessage(data.error || 'Erro ao criar conta', 'error')
+            }
+        } catch (error) {
+            showMessage('Erro ao conectar', 'error')
+        }
+    }
+
+    function showMessage(msg, type) {
+        const el = document.getElementById('message')
+        el.textContent = msg
+        el.className = 'mt-4 text-center text-sm ' + (type === 'error' ? 'text-red-600' : 'text-green-600')
+    }
+    </script>
+</body>
+</html>
