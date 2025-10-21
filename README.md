@@ -2,6 +2,8 @@
 
 Sistema inteligente de estudos para **ENARE/REVALIDA/ENAMED** com revisão espaçada adaptativa.
 
+**🆕 NOVIDADE**: Sistema preparado para **multi-usuários** com metas flexíveis (4h/3h/2h)! 
+
 ---
 
 ## 🎯 Visão Geral
@@ -11,6 +13,8 @@ O **Cérebro de Estudos HardMed** é uma plataforma web full-stack que combina:
 1. **Planejamento Macro** - Ciclo de 40 semanas até a prova
 2. **Execução Flexível** - Guia diário sem calendário fixo
 3. **Revisão Inteligente** - Sistema adaptativo baseado em prevalência e desempenho
+4. **👥 Multi-Usuário** - Sistema preparado para múltiplos usuários (ver [MULTI_USUARIO.md](MULTI_USUARIO.md))
+5. **🎯 Metas Flexíveis** - 3 níveis de meta (Ideal 4h, Realista 3h, Sobrevivência 2h)
 
 ---
 
@@ -20,7 +24,10 @@ O **Cérebro de Estudos HardMed** é uma plataforma web full-stack que combina:
 - Distribui automaticamente **419 temas** do ENARE em 40 semanas
 - Balanceamento inteligente por área médica
 - Priorização por prevalência na prova (ALTA/MÉDIA/BAIXA)
-- 4 temas por semana (1h cada = 4h/dia)
+- **Metas flexíveis**:
+  - 🎯 **Ideal**: 4 temas/semana (4h/dia) = 160 temas em 40 semanas
+  - 💪 **Realista**: 3 temas/semana (3h/dia) = 120 temas em 40 semanas
+  - 🆘 **Sobrevivência**: 2 temas/semana (2h/dia) = 80 temas em 40 semanas
 
 ### 📚 **2. Dashboard Diário**
 - **Guia do Dia**: mostra os temas da semana atual
