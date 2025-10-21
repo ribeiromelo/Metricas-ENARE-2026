@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 
 // Types
 type Bindings = {
@@ -44,11 +45,16 @@ app.use('/api/*', cors())
 // API: GERADOR DE CICLO DE 40 SEMANAS
 // ====================================================
 app.post('/api/ciclo/gerar', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
-    // 1. Verificar se já existe ciclo gerado
-    const configResult = await DB.prepare('SELECT ciclo_gerado FROM configuracoes WHERE id = 1').first()
+    // 1. Verificar se já existe ciclo gerado para este usuário
+    const configResult = await DB.prepare('SELECT ciclo_gerado FROM configuracoes WHERE usuario_id = ?')
+      .bind(usuarioId).first()
     if (configResult && configResult.ciclo_gerado) {
       return c.json({ error: 'Ciclo já foi gerado' }, 400)
     }
@@ -127,9 +133,9 @@ app.post('/api/ciclo/gerar', async (c) => {
     for (const sg of semanasGeradas) {
       // Inserir semana
       const semanaResult = await DB.prepare(`
-        INSERT INTO semanas (numero_semana, data_inicio, data_fim) 
-        VALUES (?, ?, ?)
-      `).bind(sg.semana, hoje, hoje).run()
+        INSERT INTO semanas (numero_semana, data_inicio, data_fim, usuario_id) 
+        VALUES (?, ?, ?, ?)
+      `).bind(sg.semana, hoje, hoje, usuarioId).run()
 
       const semanaId = semanaResult.meta.last_row_id
 
@@ -146,7 +152,7 @@ app.post('/api/ciclo/gerar', async (c) => {
     }
 
     // 6. Atualizar configuração
-    await DB.prepare('UPDATE configuracoes SET ciclo_gerado = 1 WHERE id = 1').run()
+    await DB.prepare('UPDATE configuracoes SET ciclo_gerado = 1 WHERE usuario_id = ?').bind(usuarioId).run()
 
     return c.json({ 
       success: true, 
@@ -164,15 +170,20 @@ app.post('/api/ciclo/gerar', async (c) => {
 // API: BUSCAR SEMANA ATUAL
 // ====================================================
 app.get('/api/semana/atual', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
-    const config = await DB.prepare('SELECT semana_atual FROM configuracoes WHERE id = 1').first()
+    const config = await DB.prepare('SELECT semana_atual FROM configuracoes WHERE usuario_id = ?')
+      .bind(usuarioId).first()
     const semanaAtual = config?.semana_atual || 1
 
     const semana = await DB.prepare(`
-      SELECT * FROM semanas WHERE numero_semana = ?
-    `).bind(semanaAtual).first() as Semana
+      SELECT * FROM semanas WHERE numero_semana = ? AND usuario_id = ?
+    `).bind(semanaAtual, usuarioId).first() as Semana
 
     if (!semana) {
       return c.json({ error: 'Semana não encontrada' }, 404)
@@ -207,7 +218,11 @@ app.get('/api/semana/atual', async (c) => {
 // API: LISTAR TODAS AS SEMANAS
 // ====================================================
 app.get('/api/semanas', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
     const semanasResult = await DB.prepare(`
@@ -215,13 +230,14 @@ app.get('/api/semanas', async (c) => {
         COUNT(st.id) as total_temas,
         SUM(CASE WHEN EXISTS(
           SELECT 1 FROM estudos e 
-          WHERE e.semana_tema_id = st.id
+          WHERE e.semana_tema_id = st.id AND e.usuario_id = ?
         ) THEN 1 ELSE 0 END) as temas_concluidos
       FROM semanas s
       LEFT JOIN semana_temas st ON st.semana_id = s.id
+      WHERE s.usuario_id = ?
       GROUP BY s.id
       ORDER BY s.numero_semana
-    `).all()
+    `).bind(usuarioId, usuarioId).all()
 
     return c.json({ semanas: semanasResult.results })
 
@@ -234,14 +250,18 @@ app.get('/api/semanas', async (c) => {
 // API: OBTER TEMAS DE UMA SEMANA ESPECÍFICA
 // ====================================================
 app.get('/api/semana/:numero', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   const numeroSemana = parseInt(c.req.param('numero'))
   
   try {
     const semana = await DB.prepare(`
       SELECT * FROM semanas 
-      WHERE numero_semana = ?
-    `).bind(numeroSemana).first()
+      WHERE numero_semana = ? AND usuario_id = ?
+    `).bind(numeroSemana, usuarioId).first()
     
     if (!semana) {
       return c.json({ error: 'Semana não encontrada' }, 404)
@@ -269,7 +289,11 @@ app.get('/api/semana/:numero', async (c) => {
 // API: REGISTRAR ESTUDO
 // ====================================================
 app.post('/api/estudo/registrar', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
     const body = await c.req.json()
@@ -284,9 +308,9 @@ app.post('/api/estudo/registrar', async (c) => {
 
     // Inserir estudo
     const estudoResult = await DB.prepare(`
-      INSERT INTO estudos (tema_id, semana_tema_id, data_estudo, metodo, questoes_feitas, questoes_acertos, acuracia, tempo_minutos, observacoes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(tema_id, semana_tema_id || null, hoje, metodo, questoes_feitas || 0, questoes_acertos || 0, acuracia, tempo_minutos || 0, observacoes || null).run()
+      INSERT INTO estudos (tema_id, semana_tema_id, data_estudo, metodo, questoes_feitas, questoes_acertos, acuracia, tempo_minutos, observacoes, usuario_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(tema_id, semana_tema_id || null, hoje, metodo, questoes_feitas || 0, questoes_acertos || 0, acuracia, tempo_minutos || 0, observacoes || null, usuarioId).run()
 
     const estudoId = estudoResult.meta.last_row_id
 
@@ -347,7 +371,11 @@ function calcularIntervalos(prevalencia: number, acuracia: number): number[] {
 // API: REVISÕES PENDENTES
 // ====================================================
 app.get('/api/revisoes/pendentes', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
     const hoje = new Date().toISOString().split('T')[0]
@@ -356,10 +384,11 @@ app.get('/api/revisoes/pendentes', async (c) => {
       SELECT r.*, t.tema, t.area, t.prevalencia
       FROM revisoes r
       INNER JOIN temas t ON r.tema_id = t.id
-      WHERE r.concluida = 0 AND r.data_agendada <= ?
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE r.concluida = 0 AND r.data_agendada <= ? AND e.usuario_id = ?
       ORDER BY r.data_agendada ASC, t.prevalencia_numero DESC
       LIMIT 20
-    `).bind(hoje).all()
+    `).bind(hoje, usuarioId).all()
 
     return c.json({ 
       revisoes: revisoesResult.results,
@@ -375,6 +404,9 @@ app.get('/api/revisoes/pendentes', async (c) => {
 // API: MARCAR REVISÃO COMO CONCLUÍDA
 // ====================================================
 app.post('/api/revisao/concluir/:id', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
   const id = c.req.param('id')
   
@@ -401,27 +433,31 @@ app.post('/api/revisao/concluir/:id', async (c) => {
 // API: MÉTRICAS GERAIS
 // ====================================================
 app.get('/api/metricas', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
   const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
   
   try {
     // Total de estudos
-    const totalEstudos = await DB.prepare('SELECT COUNT(*) as total FROM estudos').first()
+    const totalEstudos = await DB.prepare('SELECT COUNT(*) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
 
     // Total de questões feitas
-    const totalQuestoes = await DB.prepare('SELECT SUM(questoes_feitas) as total FROM estudos').first()
+    const totalQuestoes = await DB.prepare('SELECT SUM(questoes_feitas) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
 
     // Acurácia média geral
-    const acuraciaMedia = await DB.prepare('SELECT AVG(acuracia) as media FROM estudos WHERE acuracia > 0').first()
+    const acuraciaMedia = await DB.prepare('SELECT AVG(acuracia) as media FROM estudos WHERE acuracia > 0 AND usuario_id = ?').bind(usuarioId).first()
 
     // Acurácia por área
     const acuraciaPorArea = await DB.prepare(`
       SELECT t.area, AVG(e.acuracia) as media_acuracia, COUNT(e.id) as total_estudos
       FROM estudos e
       INNER JOIN temas t ON e.tema_id = t.id
-      WHERE e.acuracia > 0
+      WHERE e.acuracia > 0 AND e.usuario_id = ?
       GROUP BY t.area
       ORDER BY media_acuracia ASC
-    `).all()
+    `).bind(usuarioId).all()
 
     // Temas mais errados
     const temasMaisErrados = await DB.prepare(`
@@ -490,12 +526,19 @@ app.post('/api/config', async (c) => {
 })
 
 // ====================================================
-// FRONTEND: PÁGINA PRINCIPAL
+// FRONTEND: PÁGINA PRINCIPAL (PROTEGIDA)
 // ====================================================
-app.get('/', (c) => {
+app.get('/', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) {
+    return c.redirect('/login')
+  }
+
+  const nomeUsuario = auth.usuario.nome || 'Usuário'
+
   return c.html(`
     <!DOCTYPE html>
-    <html lang="pt-BR">
+    <html lang="pt-BR" id="html-root">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -503,6 +546,31 @@ app.get('/', (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <style>
+            /* Dark theme variables */
+            .dark {
+                --bg-primary: #1a1a2e;
+                --bg-secondary: #16213e;
+                --bg-card: #0f3460;
+                --text-primary: #e8e8e8;
+                --text-secondary: #a0a0a0;
+            }
+            .dark body {
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+            }
+            .dark .bg-white {
+                background-color: var(--bg-card) !important;
+            }
+            .dark .text-gray-800 {
+                color: var(--text-primary) !important;
+            }
+            .dark .text-gray-600 {
+                color: var(--text-secondary) !important;
+            }
+            .dark .border-gray-200 {
+                border-color: #2d3748 !important;
+            }
+        </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
         <!-- Header -->
@@ -518,9 +586,22 @@ app.get('/', (c) => {
                             <p class="text-gray-600">Sistema Inteligente de Revisões ENARE</p>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-sm text-gray-600">Semana Atual</p>
-                        <p class="text-2xl font-bold text-indigo-600" id="semana-atual">--</p>
+                    <div class="flex items-center space-x-6">
+                        <div class="text-right">
+                            <p class="text-sm text-gray-600">Semana Atual</p>
+                            <p class="text-2xl font-bold text-indigo-600" id="semana-atual">--</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button onclick="toggleTheme()" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition" title="Alternar tema">
+                                <i id="theme-icon" class="fas fa-moon text-gray-700"></i>
+                            </button>
+                            <div class="text-right">
+                                <p class="text-sm text-gray-600">Olá, ${nomeUsuario}!</p>
+                                <button onclick="logout()" class="text-sm text-red-600 hover:text-red-700 font-semibold">
+                                    <i class="fas fa-sign-out-alt mr-1"></i>Sair
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -802,6 +883,40 @@ app.get('/', (c) => {
         // ====================================================
         
         let chartAcuracia = null;
+
+        // Theme Manager
+        function toggleTheme() {
+            const html = document.getElementById('html-root')
+            const icon = document.getElementById('theme-icon')
+            
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark')
+                icon.className = 'fas fa-moon text-gray-700'
+                localStorage.setItem('theme', 'light')
+            } else {
+                html.classList.add('dark')
+                icon.className = 'fas fa-sun text-yellow-400'
+                localStorage.setItem('theme', 'dark')
+            }
+        }
+
+        // Carregar tema salvo
+        const savedTheme = localStorage.getItem('theme')
+        if (savedTheme === 'dark') {
+            document.getElementById('html-root').classList.add('dark')
+            document.getElementById('theme-icon').className = 'fas fa-sun text-yellow-400'
+        }
+
+        // Logout
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' })
+                document.cookie = 'auth_token=; path=/; max-age=0'
+                window.location.href = '/login'
+            } catch (error) {
+                console.error('Erro ao fazer logout:', error)
+            }
+        }
 
         // Carregar dados iniciais
         document.addEventListener('DOMContentLoaded', () => {
@@ -1138,6 +1253,542 @@ app.get('/', (c) => {
           }
         \`
         document.head.appendChild(style)
+        </script>
+    </body>
+    </html>
+  `)
+})
+
+// ====================================================
+// AUTENTICAÇÃO: APIs
+// ====================================================
+
+// Helper: gerar token aleatório
+function gerarToken(): string {
+  return Array.from({ length: 32 }, () => 
+    Math.random().toString(36).charAt(2)
+  ).join('')
+}
+
+// Helper: hash simples (use bcrypt em produção!)
+async function hashSenha(senha: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(senha + 'salt_hardmed_2026')
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Middleware: verificar autenticação
+async function requireAuth(c: any) {
+  const { DB } = c.env
+  const token = getCookie(c, 'auth_token')
+  
+  if (!token) {
+    return { error: 'Não autenticado', status: 401 }
+  }
+
+  const hoje = new Date().toISOString()
+  const sessao = await DB.prepare(`
+    SELECT s.*, u.id as usuario_id, u.email, u.nome, u.data_prova
+    FROM sessoes s
+    INNER JOIN usuarios u ON s.usuario_id = u.id
+    WHERE s.token = ? AND s.expires_at > ?
+  `).bind(token, hoje).first()
+
+  if (!sessao) {
+    return { error: 'Sessão expirada', status: 401 }
+  }
+
+  return { usuario: sessao }
+}
+
+// API: Registro
+app.post('/api/auth/registro', async (c) => {
+  const { DB } = c.env
+  
+  try {
+    const { email, senha, nome, data_prova } = await c.req.json()
+
+    if (!email || !senha || !nome) {
+      return c.json({ error: 'Email, senha e nome são obrigatórios' }, 400)
+    }
+
+    // Verificar se email já existe
+    const usuarioExiste = await DB.prepare('SELECT id FROM usuarios WHERE email = ?')
+      .bind(email).first()
+
+    if (usuarioExiste) {
+      return c.json({ error: 'Email já cadastrado' }, 400)
+    }
+
+    // Hash da senha
+    const senhaHash = await hashSenha(senha)
+
+    // Inserir usuário
+    const result = await DB.prepare(`
+      INSERT INTO usuarios (email, senha_hash, nome, data_prova)
+      VALUES (?, ?, ?, ?)
+    `).bind(email, senhaHash, nome, data_prova || null).run()
+
+    const usuarioId = result.meta.last_row_id
+
+    // Criar configuração inicial
+    await DB.prepare(`
+      INSERT INTO configuracoes (usuario_id, horas_por_dia, temas_por_dia, data_prova, semana_atual, ciclo_gerado)
+      VALUES (?, 4, 4, ?, 1, 0)
+    `).bind(usuarioId, data_prova || null).run()
+
+    // Criar sessão
+    const token = gerarToken()
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 30) // 30 dias
+
+    await DB.prepare(`
+      INSERT INTO sessoes (usuario_id, token, expires_at)
+      VALUES (?, ?, ?)
+    `).bind(usuarioId, token, expiresAt.toISOString()).run()
+
+    setCookie(c, 'auth_token', token, {
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      maxAge: 2592000 // 30 dias
+    })
+
+    return c.json({ 
+      success: true, 
+      token,
+      usuario: { id: usuarioId, email, nome }
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// API: Login
+app.post('/api/auth/login', async (c) => {
+  const { DB } = c.env
+  
+  try {
+    const { email, senha } = await c.req.json()
+
+    if (!email || !senha) {
+      return c.json({ error: 'Email e senha são obrigatórios' }, 400)
+    }
+
+    // Buscar usuário
+    const senhaHash = await hashSenha(senha)
+    const usuario = await DB.prepare(`
+      SELECT * FROM usuarios WHERE email = ? AND senha_hash = ?
+    `).bind(email, senhaHash).first()
+
+    if (!usuario) {
+      return c.json({ error: 'Email ou senha incorretos' }, 401)
+    }
+
+    // Atualizar last_login
+    await DB.prepare('UPDATE usuarios SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(usuario.id).run()
+
+    // Criar sessão
+    const token = gerarToken()
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 30) // 30 dias
+
+    await DB.prepare(`
+      INSERT INTO sessoes (usuario_id, token, expires_at)
+      VALUES (?, ?, ?)
+    `).bind(usuario.id, token, expiresAt.toISOString()).run()
+
+    setCookie(c, 'auth_token', token, {
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      maxAge: 2592000 // 30 dias
+    })
+
+    return c.json({ 
+      success: true, 
+      token,
+      usuario: { id: usuario.id, email: usuario.email, nome: usuario.nome }
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// API: Logout
+app.post('/api/auth/logout', async (c) => {
+  const { DB } = c.env
+  const token = getCookie(c, 'auth_token')
+  
+  if (token) {
+    await DB.prepare('DELETE FROM sessoes WHERE token = ?').bind(token).run()
+  }
+
+  deleteCookie(c, 'auth_token')
+  return c.json({ success: true })
+})
+
+// API: Verificar sessão
+app.get('/api/auth/me', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+  
+  return c.json({ usuario: auth.usuario })
+})
+
+// ====================================================
+// ROTA: LANDING PAGE
+// ====================================================
+app.get('/home', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cérebro HardMed - Sistema de Estudos ENARE 2026</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+            .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+            .card-hover { transition: all 0.3s ease; }
+            .card-hover:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(30px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .fade-in-up { animation: fadeInUp 0.6s ease-out; }
+        </style>
+    </head>
+    <body class="bg-white">
+        <!-- Hero Section -->
+        <div class="gradient-bg min-h-screen flex items-center justify-center px-4">
+            <div class="max-w-5xl mx-auto text-center text-white fade-in-up">
+                <div class="mb-8">
+                    <i class="fas fa-brain text-8xl mb-6 animate-pulse"></i>
+                </div>
+                <h1 class="text-6xl font-bold mb-4">Cérebro de Estudos HardMed</h1>
+                <p class="text-2xl mb-8 opacity-90">Sistema Inteligente de Revisões para ENARE 2026</p>
+                <p class="text-xl mb-12 max-w-2xl mx-auto opacity-80">
+                    Domine os 419 temas do ENARE com algoritmo de repetição espaçada, 
+                    ciclo de 40 semanas e métricas avançadas de performance
+                </p>
+                <div class="flex justify-center space-x-4">
+                    <a href="/login" class="bg-white text-indigo-600 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition shadow-xl">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Entrar na Plataforma
+                    </a>
+                    <a href="/login?registro=true" class="bg-indigo-800 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-indigo-900 transition shadow-xl">
+                        <i class="fas fa-user-plus mr-2"></i>Criar Conta Grátis
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="py-20 px-4 bg-gray-50">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-4xl font-bold text-center text-gray-800 mb-16">Recursos Poderosos</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Feature 1 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-indigo-600 text-5xl mb-4">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Ciclo de 40 Semanas</h3>
+                        <p class="text-gray-600">
+                            Distribuição inteligente dos 419 temas do ENARE em 40 semanas, 
+                            priorizando prevalência e balanceando áreas
+                        </p>
+                    </div>
+
+                    <!-- Feature 2 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-green-600 text-5xl mb-4">
+                            <i class="fas fa-sync-alt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Revisões Espaçadas</h3>
+                        <p class="text-gray-600">
+                            Algoritmo adaptativo que ajusta intervalos baseado em prevalência 
+                            e sua performance individual
+                        </p>
+                    </div>
+
+                    <!-- Feature 3 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-orange-600 text-5xl mb-4">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Métricas Avançadas</h3>
+                        <p class="text-gray-600">
+                            Acompanhe acurácia por área, identifique pontos fracos e 
+                            visualize seu progresso em tempo real
+                        </p>
+                    </div>
+
+                    <!-- Feature 4 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-blue-600 text-5xl mb-4">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">419 Temas Completos</h3>
+                        <p class="text-gray-600">
+                            Todas as áreas do ENARE: Clínica Médica, Cirurgia, GO, Pediatria, 
+                            Preventiva e Saúde da Família
+                        </p>
+                    </div>
+
+                    <!-- Feature 5 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-purple-600 text-5xl mb-4">
+                            <i class="fas fa-target"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Metas Personalizadas</h3>
+                        <p class="text-gray-600">
+                            Configure horas e temas por dia de acordo com sua disponibilidade 
+                            e estilo de estudo
+                        </p>
+                    </div>
+
+                    <!-- Feature 6 -->
+                    <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
+                        <div class="text-red-600 text-5xl mb-4">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Foco Total</h3>
+                        <p class="text-gray-600">
+                            Guia do dia automatizado mostra exatamente o que estudar, 
+                            sem perder tempo decidindo
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Section -->
+        <div class="gradient-bg py-20 px-4">
+            <div class="max-w-4xl mx-auto text-center text-white">
+                <h2 class="text-4xl font-bold mb-6">Pronto para Dominar o ENARE 2026?</h2>
+                <p class="text-xl mb-8 opacity-90">
+                    Junte-se a centenas de estudantes que já estão usando o método mais eficiente
+                </p>
+                <a href="/login" class="bg-white text-indigo-600 px-12 py-5 rounded-xl font-bold text-xl hover:bg-gray-100 transition shadow-2xl inline-block">
+                    <i class="fas fa-rocket mr-2"></i>Começar Agora - É Grátis!
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-gray-900 text-white py-12 px-4">
+            <div class="max-w-6xl mx-auto text-center">
+                <div class="mb-6">
+                    <i class="fas fa-brain text-5xl text-indigo-400 mb-4"></i>
+                </div>
+                <p class="text-gray-400 mb-4">© 2025 Cérebro HardMed. Sistema inteligente de estudos para ENARE.</p>
+                <p class="text-gray-500 text-sm">
+                    <i class="fas fa-code mr-2"></i>Desenvolvido com Hono + Cloudflare + IA
+                </p>
+            </div>
+        </footer>
+    </body>
+    </html>
+  `)
+})
+
+// ====================================================
+// ROTA: LOGIN/REGISTRO
+// ====================================================
+app.get('/login', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - Cérebro HardMed</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+            .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        </style>
+    </head>
+    <body class="gradient-bg min-h-screen flex items-center justify-center px-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+            <div class="text-center mb-8">
+                <i class="fas fa-brain text-6xl text-indigo-600 mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-800">Cérebro HardMed</h1>
+                <p class="text-gray-600 mt-2">Sistema de Estudos ENARE 2026</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+                <button onclick="mostrarLogin()" id="tab-login" class="flex-1 py-2 rounded-lg font-semibold transition bg-white text-indigo-600 shadow">
+                    Login
+                </button>
+                <button onclick="mostrarRegistro()" id="tab-registro" class="flex-1 py-2 rounded-lg font-semibold transition text-gray-600">
+                    Criar Conta
+                </button>
+            </div>
+
+            <!-- Formulário de Login -->
+            <form id="form-login" class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Email</label>
+                    <input type="email" id="login-email" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="seu@email.com">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Senha</label>
+                    <input type="password" id="login-senha" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="••••••••">
+                </div>
+                <button type="submit"
+                    class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Entrar
+                </button>
+            </form>
+
+            <!-- Formulário de Registro -->
+            <form id="form-registro" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Nome Completo</label>
+                    <input type="text" id="registro-nome" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Seu nome">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Email</label>
+                    <input type="email" id="registro-email" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="seu@email.com">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Senha</label>
+                    <input type="password" id="registro-senha" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Mínimo 6 caracteres">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Data da Prova (opcional)</label>
+                    <input type="date" id="registro-data-prova"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button type="submit"
+                    class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
+                    <i class="fas fa-user-plus mr-2"></i>Criar Conta
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <a href="/home" class="text-indigo-600 hover:text-indigo-700 font-semibold">
+                    <i class="fas fa-arrow-left mr-1"></i>Voltar para Home
+                </a>
+            </div>
+
+            <div id="mensagem" class="mt-4 p-3 rounded-lg hidden"></div>
+        </div>
+
+        <script>
+        function mostrarLogin() {
+            document.getElementById('form-login').classList.remove('hidden')
+            document.getElementById('form-registro').classList.add('hidden')
+            document.getElementById('tab-login').classList.add('bg-white', 'text-indigo-600', 'shadow')
+            document.getElementById('tab-login').classList.remove('text-gray-600')
+            document.getElementById('tab-registro').classList.remove('bg-white', 'text-indigo-600', 'shadow')
+            document.getElementById('tab-registro').classList.add('text-gray-600')
+        }
+
+        function mostrarRegistro() {
+            document.getElementById('form-login').classList.add('hidden')
+            document.getElementById('form-registro').classList.remove('hidden')
+            document.getElementById('tab-registro').classList.add('bg-white', 'text-indigo-600', 'shadow')
+            document.getElementById('tab-registro').classList.remove('text-gray-600')
+            document.getElementById('tab-login').classList.remove('bg-white', 'text-indigo-600', 'shadow')
+            document.getElementById('tab-login').classList.add('text-gray-600')
+        }
+
+        function mostrarMensagem(texto, tipo) {
+            const div = document.getElementById('mensagem')
+            div.textContent = texto
+            div.className = 'mt-4 p-3 rounded-lg ' + (tipo === 'erro' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')
+            div.classList.remove('hidden')
+            setTimeout(() => div.classList.add('hidden'), 5000)
+        }
+
+        // Login
+        document.getElementById('form-login').addEventListener('submit', async (e) => {
+            e.preventDefault()
+            const email = document.getElementById('login-email').value
+            const senha = document.getElementById('login-senha').value
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, senha })
+                })
+
+                const data = await res.json()
+
+                if (data.success) {
+                    document.cookie = \`auth_token=\${data.token}; path=/; max-age=2592000\`
+                    mostrarMensagem('Login realizado! Redirecionando...', 'sucesso')
+                    setTimeout(() => window.location.href = '/', 1000)
+                } else {
+                    mostrarMensagem(data.error || 'Erro ao fazer login', 'erro')
+                }
+            } catch (error) {
+                mostrarMensagem('Erro ao conectar com servidor', 'erro')
+            }
+        })
+
+        // Registro
+        document.getElementById('form-registro').addEventListener('submit', async (e) => {
+            e.preventDefault()
+            const nome = document.getElementById('registro-nome').value
+            const email = document.getElementById('registro-email').value
+            const senha = document.getElementById('registro-senha').value
+            const dataProva = document.getElementById('registro-data-prova').value
+
+            if (senha.length < 6) {
+                mostrarMensagem('Senha deve ter no mínimo 6 caracteres', 'erro')
+                return
+            }
+
+            try {
+                const res = await fetch('/api/auth/registro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, senha, nome, data_prova: dataProva || null })
+                })
+
+                const data = await res.json()
+
+                if (data.success) {
+                    document.cookie = \`auth_token=\${data.token}; path=/; max-age=2592000\`
+                    mostrarMensagem('Conta criada! Redirecionando...', 'sucesso')
+                    setTimeout(() => window.location.href = '/', 1000)
+                } else {
+                    mostrarMensagem(data.error || 'Erro ao criar conta', 'erro')
+                }
+            } catch (error) {
+                mostrarMensagem('Erro ao conectar com servidor', 'erro')
+            }
+        })
+
+        // Verificar parâmetro URL
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('registro') === 'true') {
+            mostrarRegistro()
+        }
         </script>
     </body>
     </html>
