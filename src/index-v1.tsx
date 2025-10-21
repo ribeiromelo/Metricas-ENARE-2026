@@ -12,25 +12,6 @@ const app = new Hono<{ Bindings: Bindings }>()
 // CORS
 app.use('/api/*', cors())
 
-// Servir arquivos estáticos
-app.get('/static/*', async (c) => {
-  const path = c.req.path.replace('/static/', '')
-  const file = await (c.env as any).ASSETS?.fetch(new Request(`https://dummy.com/static/${path}`))
-  if (file) return file
-  
-  // Fallback para desenvolvimento local
-  try {
-    if (path === 'styles.css') {
-      return c.text(`:root { --bg-primary: #f7fafc; --bg-secondary: #ffffff; } .dark { --bg-primary: #1a1a2e; } .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); z-index: 50; display: flex; align-items: center; justify-center; }`, 200, { 'Content-Type': 'text/css' })
-    }
-    if (path === 'app.js') {
-      return c.text(`class Modal { static show() {} static close() {} } window.Modal = Modal; class ThemeManager { static init() { const t = localStorage.getItem('theme') || 'light'; this.setTheme(t); } static setTheme(t) { t === 'dark' ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); localStorage.setItem('theme', t); } static toggle() { const isDark = document.documentElement.classList.contains('dark'); this.setTheme(isDark ? 'light' : 'dark'); }} ThemeManager.init(); window.ThemeManager = ThemeManager;`, 200, { 'Content-Type': 'application/javascript' })
-    }
-  } catch (e) {}
-  
-  return c.notFound()
-})
-
 // ====================================================
 // FUNÇÕES DE AUTENTICAÇÃO
 // ====================================================
@@ -621,267 +602,6 @@ app.get('/api/metricas', async (c) => {
 })
 
 // ====================================================
-// API: DETALHES DA SEMANA (COM TEMAS)
-// ====================================================
-app.get('/api/semana/:numero', async (c) => {
-  const auth = await requireAuth(c)
-  if (auth.error) return c.json({ error: auth.error }, auth.status)
-
-  const { DB } = c.env
-  const usuarioId = auth.usuario.usuario_id
-  const numeroSemana = parseInt(c.req.param('numero'))
-
-  try {
-    const semana = await DB.prepare(`
-      SELECT * FROM semanas 
-      WHERE numero_semana = ? AND usuario_id = ?
-    `).bind(numeroSemana, usuarioId).first()
-
-    if (!semana) {
-      return c.json({ error: 'Semana não encontrada' }, 404)
-    }
-
-    const temasResult = await DB.prepare(`
-      SELECT st.*, t.* 
-      FROM semana_temas st
-      INNER JOIN temas t ON st.tema_id = t.id
-      WHERE st.semana_id = ?
-      ORDER BY st.ordem
-    `).bind(semana.id).all()
-
-    return c.json({
-      semana,
-      temas: temasResult.results
-    })
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500)
-  }
-})
-
-// ====================================================
-// API: ATUALIZAR ORDEM DOS TEMAS
-// ====================================================
-app.put('/api/semana/:numero/temas/reordenar', async (c) => {
-  const auth = await requireAuth(c)
-  if (auth.error) return c.json({ error: auth.error }, auth.status)
-
-  const { DB } = c.env
-  const usuarioId = auth.usuario.usuario_id
-  const numeroSemana = parseInt(c.req.param('numero'))
-
-  try {
-    const body = await c.req.json()
-    const { temas } = body // Array de { id, ordem }
-
-    const semana = await DB.prepare(`
-      SELECT * FROM semanas 
-      WHERE numero_semana = ? AND usuario_id = ?
-    `).bind(numeroSemana, usuarioId).first()
-
-    if (!semana) {
-      return c.json({ error: 'Semana não encontrada' }, 404)
-    }
-
-    // Atualizar ordem de cada tema
-    for (const tema of temas) {
-      await DB.prepare(`
-        UPDATE semana_temas 
-        SET ordem = ? 
-        WHERE id = ? AND semana_id = ?
-      `).bind(tema.ordem, tema.id, semana.id).run()
-    }
-
-    return c.json({ success: true })
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500)
-  }
-})
-
-// ====================================================
-// API: REMOVER TEMA DA SEMANA
-// ====================================================
-app.delete('/api/semana/tema/:id', async (c) => {
-  const auth = await requireAuth(c)
-  if (auth.error) return c.json({ error: auth.error }, auth.status)
-
-  const { DB } = c.env
-  const usuarioId = auth.usuario.usuario_id
-  const semanaTemal = parseInt(c.req.param('id'))
-
-  try {
-    // Verificar se o tema pertence ao usuário
-    const tema = await DB.prepare(`
-      SELECT st.* FROM semana_temas st
-      INNER JOIN semanas s ON st.semana_id = s.id
-      WHERE st.id = ? AND s.usuario_id = ?
-    `).bind(semanaTemal, usuarioId).first()
-
-    if (!tema) {
-      return c.json({ error: 'Tema não encontrado ou não pertence a você' }, 404)
-    }
-
-    await DB.prepare('DELETE FROM semana_temas WHERE id = ?').bind(semanaTemal).run()
-
-    return c.json({ success: true })
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500)
-  }
-})
-
-// ====================================================
-// LANDING PAGE
-// ====================================================
-app.get('/home', (c) => {
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cérebro HardMed - Sistema de Estudos ENARE 2026</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/styles.css" rel="stylesheet">
-</head>
-<body class="bg-white dark:bg-gray-900">
-    <div class="min-h-screen">
-        <!-- Header -->
-        <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="bg-indigo-600 p-2 rounded-lg">
-                        <i class="fas fa-brain text-white text-2xl"></i>
-                    </div>
-                    <span class="text-2xl font-bold text-gray-800 dark:text-white">Cérebro HardMed</span>
-                </div>
-                <a href="/login" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-semibold transition">
-                    <i class="fas fa-sign-in-alt mr-2"></i>Entrar
-                </a>
-            </div>
-        </nav>
-
-        <!-- Hero Section -->
-        <div class="gradient-bg text-white py-20">
-            <div class="max-w-7xl mx-auto px-4 text-center">
-                <div class="animate-fade-in">
-                    <div class="inline-block bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
-                        <span class="text-sm font-semibold">🎯 Preparação ENARE 2026</span>
-                    </div>
-                    <h1 class="text-5xl md:text-6xl font-bold mb-6">
-                        Seu Cérebro Inteligente<br>para Estudos Médicos
-                    </h1>
-                    <p class="text-xl md:text-2xl mb-8 text-gray-100 max-w-3xl mx-auto">
-                        Sistema completo com 419 temas, algoritmo de revisão espaçada e ciclo personalizado de 40 semanas
-                    </p>
-                    <div class="flex gap-4 justify-center">
-                        <a href="/login" class="bg-white text-indigo-600 hover:bg-gray-100 px-8 py-4 rounded-lg font-bold text-lg transition shadow-lg">
-                            <i class="fas fa-rocket mr-2"></i>Começar Agora
-                        </a>
-                        <a href="#features" class="bg-white bg-opacity-20 backdrop-blur-sm text-white hover:bg-opacity-30 px-8 py-4 rounded-lg font-bold text-lg transition">
-                            Saiba Mais
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Features Section -->
-        <div id="features" class="py-20 bg-gray-50 dark:bg-gray-800">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="text-center mb-16">
-                    <h2 class="text-4xl font-bold text-gray-800 dark:text-white mb-4">Funcionalidades Principais</h2>
-                    <p class="text-xl text-gray-600 dark:text-gray-300">Tudo que você precisa para passar no ENARE</p>
-                </div>
-
-                <div class="grid md:grid-cols-3 gap-8">
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-indigo-100 dark:bg-indigo-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-calendar-alt text-indigo-600 dark:text-indigo-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Ciclo de 40 Semanas</h3>
-                        <p class="text-gray-600 dark:text-gray-300">419 temas distribuídos de forma inteligente, balanceados por área e prevalência</p>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-green-100 dark:bg-green-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-sync-alt text-green-600 dark:text-green-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Revisões Inteligentes</h3>
-                        <p class="text-gray-600 dark:text-gray-300">Algoritmo de repetição espaçada que se adapta à sua acurácia e à prevalência dos temas</p>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-blue-100 dark:bg-blue-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-chart-line text-blue-600 dark:text-blue-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Métricas Detalhadas</h3>
-                        <p class="text-gray-600 dark:text-gray-300">Acompanhe sua evolução com gráficos e estatísticas por área médica</p>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-users text-purple-600 dark:text-purple-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Multi-Usuário</h3>
-                        <p class="text-gray-600 dark:text-gray-300">Compartilhe com amigos! Cada um tem sua conta e dados isolados</p>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-yellow-100 dark:bg-yellow-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-cog text-yellow-600 dark:text-yellow-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Personalizável</h3>
-                        <p class="text-gray-600 dark:text-gray-300">Metas flexíveis (4h, 3h, 2h/dia), edição de ciclo, tema claro/escuro</p>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-700 p-8 rounded-xl shadow-lg card-hover">
-                        <div class="bg-red-100 dark:bg-red-900 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-shield-alt text-red-600 dark:text-red-300 text-2xl"></i>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-3">Seguro</h3>
-                        <p class="text-gray-600 dark:text-gray-300">Autenticação robusta, senhas hasheadas, cookies httpOnly</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- CTA Section -->
-        <div class="bg-indigo-600 dark:bg-indigo-800 py-16">
-            <div class="max-w-4xl mx-auto px-4 text-center">
-                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
-                    Pronto para Começar?
-                </h2>
-                <p class="text-xl text-indigo-100 mb-8">
-                    Junte-se a centenas de estudantes rumo à aprovação no ENARE 2026
-                </p>
-                <a href="/login" class="inline-block bg-white text-indigo-600 hover:bg-gray-100 px-8 py-4 rounded-lg font-bold text-lg transition shadow-lg">
-                    <i class="fas fa-user-plus mr-2"></i>Criar Conta Grátis
-                </a>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="bg-gray-800 dark:bg-gray-900 text-gray-300 py-8">
-            <div class="max-w-7xl mx-auto px-4 text-center">
-                <div class="flex items-center justify-center space-x-3 mb-4">
-                    <div class="bg-indigo-600 p-2 rounded-lg">
-                        <i class="fas fa-brain text-white text-xl"></i>
-                    </div>
-                    <span class="text-xl font-bold text-white">Cérebro HardMed</span>
-                </div>
-                <p class="text-sm mb-4">Sistema Inteligente de Estudos para ENARE 2026</p>
-                <p class="text-xs text-gray-400">Desenvolvido com ❤️ para estudantes de medicina</p>
-            </div>
-        </footer>
-    </div>
-
-    <script src="/static/app.js"></script>
-</body>
-</html>`
-  
-  return c.html(html)
-})
-
-// ====================================================
 // PÁGINA DE LOGIN
 // ====================================================
 app.get('/login', (c) => {
@@ -892,24 +612,21 @@ app.get('/login', (c) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Cérebro HardMed</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/styles.css" rel="stylesheet">
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 min-h-screen flex items-center justify-center p-4">
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
     <div class="max-w-md w-full">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
             <div class="text-center mb-8">
                 <div class="inline-block bg-indigo-600 p-4 rounded-full mb-4">
-                    <i class="fas fa-brain text-white text-3xl"></i>
+                    <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
+                    </svg>
                 </div>
-                <h1 class="text-3xl font-bold text-gray-800 dark:text-white mb-2">Cérebro HardMed</h1>
-                <p class="text-gray-600 dark:text-gray-300">Sistema de Estudos ENARE 2026</p>
-                <a href="/home" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mt-2 inline-block">
-                    <i class="fas fa-arrow-left mr-1"></i>Voltar para home
-                </a>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Cérebro HardMed</h1>
+                <p class="text-gray-600">Sistema de Estudos ENARE 2026</p>
             </div>
 
-            <div class="flex mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
                 <button onclick="showTab('login')" id="btn-login" class="flex-1 py-2 px-4 rounded-md bg-white shadow text-indigo-600 font-semibold transition">
                     Entrar
                 </button>
@@ -921,14 +638,14 @@ app.get('/login', (c) => {
             <form id="form-login" onsubmit="handleLogin(event)">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
                         <input type="email" id="login-email" required 
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Senha</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
                         <input type="password" id="login-senha" required 
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition">
                         Entrar
@@ -939,24 +656,24 @@ app.get('/login', (c) => {
             <form id="form-cadastro" onsubmit="handleCadastro(event)" class="hidden">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                         <input type="text" id="cadastro-nome" required 
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
                         <input type="email" id="cadastro-email" required 
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Senha (mínimo 6 caracteres)</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Senha (mínimo 6 caracteres)</label>
                         <input type="password" id="cadastro-senha" required minlength="6"
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data da Prova (opcional)</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Data da Prova (opcional)</label>
                         <input type="date" id="cadastro-data-prova" 
-                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent">
                     </div>
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition">
                         Criar Conta
@@ -1047,10 +764,9 @@ app.get('/login', (c) => {
     function showMessage(msg, type) {
         const el = document.getElementById('message')
         el.textContent = msg
-        el.className = 'mt-4 text-center text-sm font-medium ' + (type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')
+        el.className = 'mt-4 text-center text-sm font-medium ' + (type === 'error' ? 'text-red-600' : 'text-green-600')
     }
     </script>
-    <script src="/static/app.js"></script>
 </body>
 </html>`
   
@@ -1065,7 +781,7 @@ app.get('/', async (c) => {
   const token = getCookie(c, 'auth_token')
   
   if (!token) {
-    return c.redirect('/home')
+    return c.redirect('/login')
   }
 
   const usuario = await getUsuarioFromToken(DB, token)
@@ -1083,11 +799,10 @@ app.get('/', async (c) => {
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link href="/static/styles.css" rel="stylesheet">
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 min-h-screen">
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <!-- Header -->
-    <header class="bg-white dark:bg-gray-800 shadow-lg border-b-4 border-indigo-600">
+    <header class="bg-white shadow-lg border-b-4 border-indigo-600">
         <div class="max-w-7xl mx-auto px-4 py-6">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
@@ -1095,8 +810,8 @@ app.get('/', async (c) => {
                         <i class="fas fa-brain text-white text-3xl"></i>
                     </div>
                     <div>
-                        <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Cérebro HardMed</h1>
-                        <p class="text-gray-600 dark:text-gray-300">Olá, ${usuario.nome}!</p>
+                        <h1 class="text-3xl font-bold text-gray-800">Cérebro HardMed</h1>
+                        <p class="text-gray-600">Olá, ${usuario.nome}!</p>
                     </div>
                 </div>
                 <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
@@ -1110,16 +825,16 @@ app.get('/', async (c) => {
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Tabs -->
         <div class="flex space-x-2 mb-6 overflow-x-auto">
-            <button onclick="showTab('dashboard')" class="tab-btn active px-6 py-3 bg-white dark:bg-gray-800 rounded-lg shadow font-semibold text-gray-700 dark:text-gray-200">
+            <button onclick="showTab('dashboard')" class="tab-btn active px-6 py-3 bg-white rounded-lg shadow font-semibold">
                 <i class="fas fa-home mr-2"></i>Dashboard
             </button>
-            <button onclick="showTab('ciclo')" class="tab-btn px-6 py-3 bg-white dark:bg-gray-800 rounded-lg shadow font-semibold text-gray-700 dark:text-gray-200">
+            <button onclick="showTab('ciclo')" class="tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
                 <i class="fas fa-calendar-alt mr-2"></i>Ciclo 40 Semanas
             </button>
-            <button onclick="showTab('revisoes')" class="tab-btn px-6 py-3 bg-white dark:bg-gray-800 rounded-lg shadow font-semibold text-gray-700 dark:text-gray-200">
+            <button onclick="showTab('revisoes')" class="tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
                 <i class="fas fa-sync-alt mr-2"></i>Revisões
             </button>
-            <button onclick="showTab('metricas')" class="tab-btn px-6 py-3 bg-white dark:bg-gray-800 rounded-lg shadow font-semibold text-gray-700 dark:text-gray-200">
+            <button onclick="showTab('metricas')" class="tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
                 <i class="fas fa-chart-line mr-2"></i>Métricas
             </button>
         </div>
@@ -1128,25 +843,25 @@ app.get('/', async (c) => {
         <div id="tab-dashboard" class="tab-content">
             <!-- Cards de Métricas -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border-t-4 border-indigo-600">
+                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-indigo-600">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-600 dark:text-gray-300 text-sm font-semibold">Total Estudos</p>
+                            <p class="text-gray-600 text-sm font-semibold">Total Estudos</p>
                             <p class="text-3xl font-bold text-indigo-600" id="total-estudos">0</p>
                         </div>
                         <i class="fas fa-book-open text-4xl text-indigo-200"></i>
                     </div>
                 </div>
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border-t-4 border-green-600">
+                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-green-600">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-600 dark:text-gray-300 text-sm font-semibold">Questões Feitas</p>
+                            <p class="text-gray-600 text-sm font-semibold">Questões Feitas</p>
                             <p class="text-3xl font-bold text-green-600" id="total-questoes">0</p>
                         </div>
                         <i class="fas fa-clipboard-check text-4xl text-green-200"></i>
                     </div>
                 </div>
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border-t-4 border-blue-600">
+                <div class="bg-white rounded-lg shadow-lg p-6 border-t-4 border-blue-600">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-600 text-sm font-semibold">Acurácia Média</p>
