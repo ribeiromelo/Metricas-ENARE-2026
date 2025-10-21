@@ -190,15 +190,15 @@ app.get('/api/semana/atual', async (c) => {
     }
 
     // CRITICAL FIX: Buscar temas da semana e verificar quais já foram estudados
-    // Adiciona coluna 'ja_estudado' (COUNT de estudos para cada tema)
+    // Adiciona coluna 'ja_estudado' (COUNT de estudos para cada TEMA, não semana_tema)
     const temasResult = await DB.prepare(`
       SELECT st.*, t.*, 
-        (SELECT COUNT(*) FROM estudos e WHERE e.semana_tema_id = st.id) as ja_estudado
+        (SELECT COUNT(*) FROM estudos e WHERE e.tema_id = t.id AND e.usuario_id = ?) as ja_estudado
       FROM semana_temas st
       INNER JOIN temas t ON st.tema_id = t.id
       WHERE st.semana_id = ?
       ORDER BY st.ordem
-    `).bind(semana.id).all()
+    `).bind(usuarioId, semana.id).all()
 
     // Filtrar para mostrar APENAS temas não estudados na homepage
     const temasNaoEstudados = temasResult.results.filter((t: any) => t.ja_estudado === 0)
