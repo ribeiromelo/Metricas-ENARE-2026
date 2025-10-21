@@ -381,14 +381,14 @@ app.get('/api/revisoes/pendentes', async (c) => {
     const hoje = new Date().toISOString().split('T')[0]
 
     const revisoesResult = await DB.prepare(`
-      SELECT r.*, t.tema, t.area, t.prevalencia
+      SELECT r.*, t.tema, t.area, t.prevalencia, t.prevalencia_numero
       FROM revisoes r
       INNER JOIN temas t ON r.tema_id = t.id
       INNER JOIN estudos e ON r.estudo_id = e.id
-      WHERE r.concluida = 0 AND r.data_agendada <= ? AND e.usuario_id = ?
+      WHERE r.concluida = 0 AND e.usuario_id = ?
       ORDER BY r.data_agendada ASC, t.prevalencia_numero DESC
       LIMIT 20
-    `).bind(hoje, usuarioId).all()
+    `).bind(usuarioId).all()
 
     return c.json({ 
       revisoes: revisoesResult.results,
@@ -412,15 +412,53 @@ app.post('/api/revisao/concluir/:id', async (c) => {
   
   try {
     const body = await c.req.json()
-    const { acuracia_revisao } = body
+    const { 
+      acuracia_revisao, 
+      metodo, 
+      tema_id, 
+      prevalencia_numero,
+      questoes_feitas,
+      questoes_acertos,
+      dificuldade
+    } = body
 
     const hoje = new Date().toISOString().split('T')[0]
 
+    // Marcar revisão como concluída
     await DB.prepare(`
       UPDATE revisoes 
       SET concluida = 1, data_realizada = ?, acuracia_revisao = ?
       WHERE id = ?
     `).bind(hoje, acuracia_revisao || null, id).run()
+
+    // Buscar informações da revisão atual
+    const revisaoAtual = await DB.prepare(`
+      SELECT numero_revisao, estudo_id FROM revisoes WHERE id = ?
+    `).bind(id).first()
+
+    // Calcular próximos intervalos baseado em prevalência e performance
+    const intervalos = calcularProximasRevisoes(
+      prevalencia_numero, 
+      acuracia_revisao, 
+      revisaoAtual.numero_revisao
+    )
+
+    // Criar novas revisões
+    for (let i = 0; i < intervalos.length; i++) {
+      const dataAgendada = new Date()
+      dataAgendada.setDate(dataAgendada.getDate() + intervalos[i])
+      
+      await DB.prepare(`
+        INSERT INTO revisoes (estudo_id, tema_id, numero_revisao, data_agendada, intervalo_dias)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(
+        revisaoAtual.estudo_id, 
+        tema_id, 
+        revisaoAtual.numero_revisao + i + 1, 
+        dataAgendada.toISOString().split('T')[0], 
+        intervalos[i]
+      ).run()
+    }
 
     return c.json({ success: true })
 
@@ -428,6 +466,47 @@ app.post('/api/revisao/concluir/:id', async (c) => {
     return c.json({ error: error.message }, 500)
   }
 })
+
+// ====================================================
+// FUNÇÃO: CALCULAR PRÓXIMAS REVISÕES
+// ====================================================
+function calcularProximasRevisoes(
+  prevalencia: number, 
+  acuracia: number, 
+  numeroRevisaoAtual: number
+): number[] {
+  // Intervalos base progressivos: 3d → 7d → 15d → 30d → 60d
+  let intervalos = [3, 7, 15, 30, 60]
+
+  // Limitar revisões: máximo 3 próximas revisões por vez
+  const maxRevisoes = 3
+
+  // Ajuste por prevalência (ALTA = 5, MÉDIA = 3, BAIXA = 1)
+  let fatorPrevalencia = 1.0
+  if (prevalencia === 5) {
+    fatorPrevalencia = 0.7 // Revisar 30% mais rápido
+  } else if (prevalencia === 1) {
+    fatorPrevalencia = 1.3 // Revisar 30% mais devagar
+  }
+
+  // Ajuste por acurácia/dificuldade
+  let fatorPerformance = 1.0
+  if (acuracia < 70) {
+    // Baixa performance: revisar 50% mais rápido
+    fatorPerformance = 0.5
+  } else if (acuracia >= 90) {
+    // Alta performance: revisar 40% mais devagar
+    fatorPerformance = 1.4
+  }
+
+  // Aplicar fatores
+  intervalos = intervalos.map(i => 
+    Math.max(1, Math.floor(i * fatorPrevalencia * fatorPerformance))
+  )
+
+  // Retornar apenas as próximas revisões (não todas de uma vez)
+  return intervalos.slice(0, maxRevisoes)
+}
 
 // ====================================================
 // API: MÉTRICAS GERAIS
@@ -956,14 +1035,20 @@ app.get('/', async (c) => {
                       <p class="text-sm text-gray-500 mt-1">\${t.subtopicos || ''}</p>
                       <p class="text-xs text-indigo-600 mt-2"><i class="fas fa-clock mr-1"></i>Meta: \${t.meta_tempo_minutos} min · \${t.meta_questoes} questões</p>
                     </div>
-                    <button onclick="registrarEstudo(\${t.tema_id}, \${t.id})" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
-                      <i class="fas fa-check mr-1"></i>Concluir
-                    </button>
+                    \${t.ja_estudado === 0 ? \`
+                      <button onclick="registrarEstudo(\${t.tema_id}, \${t.id})" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-check mr-1"></i>Estudar
+                      </button>
+                    \` : \`
+                      <div class="text-green-600 text-sm font-semibold">
+                        <i class="fas fa-check-circle mr-1"></i>Estudado
+                      </div>
+                    \`}
                   </div>
                 </div>
               \`).join('')
             } else {
-              guiaDiv.innerHTML = '<p class="text-gray-600">Nenhum tema para hoje</p>'
+              guiaDiv.innerHTML = '<p class="text-gray-600">Nenhum tema para hoje! 🎉</p>'
             }
 
             const revisoesRes = await fetch('/api/revisoes/pendentes')
@@ -971,15 +1056,33 @@ app.get('/', async (c) => {
             
             const revisoesDiv = document.getElementById('revisoes-do-dia')
             if (revisoesData.revisoes && revisoesData.revisoes.length > 0) {
-              revisoesDiv.innerHTML = revisoesData.revisoes.slice(0, 5).map(r => \`
-                <div class="border border-orange-200 rounded-lg p-3 bg-orange-50">
-                  <h4 class="font-semibold text-gray-800">\${r.tema}</h4>
-                  <p class="text-sm text-gray-600">\${r.area} · Revisão #\${r.numero_revisao}</p>
-                  <button onclick="concluirRevisao(\${r.id})" class="mt-2 bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
-                    <i class="fas fa-check mr-1"></i>Marcar Revisada
-                  </button>
-                </div>
-              \`).join('')
+              const hoje = new Date()
+              hoje.setHours(0, 0, 0, 0)
+              
+              revisoesDiv.innerHTML = revisoesData.revisoes.slice(0, 5).map(r => {
+                const dataAgendada = new Date(r.data_agendada)
+                const dataFormatada = dataAgendada.toLocaleDateString('pt-BR')
+                const podeRevisar = dataAgendada <= hoje
+                
+                return \`
+                  <div class="border border-orange-200 rounded-lg p-3 bg-orange-50">
+                    <h4 class="font-semibold text-gray-800">\${r.tema}</h4>
+                    <p class="text-sm text-gray-600">\${r.area} · Revisão #\${r.numero_revisao}</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      <i class="fas fa-calendar mr-1"></i>Agendada para: \${dataFormatada}
+                    </p>
+                    \${podeRevisar ? \`
+                      <button onclick="concluirRevisao(\${r.id}, \${r.tema_id}, '\${r.tema}', \${r.prevalencia_numero})" class="mt-2 bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
+                        <i class="fas fa-check mr-1"></i>Marcar Revisada
+                      </button>
+                    \` : \`
+                      <button disabled class="mt-2 bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed opacity-60">
+                        <i class="fas fa-clock mr-1"></i>Aguardar data
+                      </button>
+                    \`}
+                  </div>
+                \`
+              }).join('')
             } else {
               revisoesDiv.innerHTML = '<p class="text-gray-600">Nenhuma revisão pendente hoje 🎉</p>'
             }
@@ -1040,28 +1143,157 @@ app.get('/', async (c) => {
         }
 
         // Concluir revisão
-        async function concluirRevisao(revisaoId) {
-          Modal.input('Qual foi sua acurácia na revisão?', 'Digite 0-100', async (acuracia) => {
-            if (!acuracia) return;
+        async function concluirRevisao(revisaoId, temaId, temaNome, prevalencia) {
+          // Verificar data antes de prosseguir
+          const hoje = new Date()
+          hoje.setHours(0, 0, 0, 0)
+          
+          // Modal de seleção de método
+          Modal.show({
+            title: 'Método de Revisão',
+            content: \`
+              <p class="text-gray-700 mb-4">Como você revisou o tema "<strong>\${temaNome}</strong>"?</p>
+              <div class="space-y-3">
+                <button id="metodo-questoes" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                  <i class="fas fa-question-circle mr-2"></i>Questões
+                </button>
+                <button id="metodo-flashcard" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                  <i class="fas fa-layer-group mr-2"></i>FlashCards ou Outro Método
+                </button>
+              </div>
+            \`,
+            type: 'question',
+            buttons: [
+              { label: 'Cancelar', primary: false, callback: () => {} }
+            ]
+          })
+          
+          // Adicionar event listeners após o modal aparecer
+          setTimeout(() => {
+            document.getElementById('metodo-questoes')?.addEventListener('click', () => {
+              document.body.querySelector('.fixed.inset-0').remove()
+              revisarPorQuestoes(revisaoId, temaId, prevalencia)
+            })
+            
+            document.getElementById('metodo-flashcard')?.addEventListener('click', () => {
+              document.body.querySelector('.fixed.inset-0').remove()
+              revisarPorFlashcard(revisaoId, temaId, prevalencia)
+            })
+          }, 100)
+        }
+        
+        // Revisar por questões
+        async function revisarPorQuestoes(revisaoId, temaId, prevalencia) {
+          Modal.input('Quantas questões você fez?', 'Ex: 10', async (questoes) => {
+            if (!questoes) return
+            
+            Modal.input('Quantas você acertou?', 'Ex: 7', async (acertos) => {
+              if (!acertos) return
+              
+              const acuracia = (parseInt(acertos) / parseInt(questoes)) * 100
+              
+              try {
+                const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    acuracia_revisao: acuracia,
+                    metodo: 'questoes',
+                    questoes_feitas: parseInt(questoes),
+                    questoes_acertos: parseInt(acertos),
+                    tema_id: temaId,
+                    prevalencia_numero: prevalencia
+                  })
+                })
 
-            try {
-              const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ acuracia_revisao: parseFloat(acuracia) })
-              })
-
-              const data = await res.json()
-              if (data.success) {
-                await Modal.alert('Sucesso!', 'Revisão concluída!', 'success')
-                loadDashboard()
-              } else {
-                await Modal.alert('Erro', data.error, 'error')
+                const data = await res.json()
+                if (data.success) {
+                  const msg = acuracia >= 70 
+                    ? \`Revisão concluída! Acurácia: \${acuracia.toFixed(1)}% ✅\nBom desempenho! Intervalos normais aplicados.\`
+                    : \`Revisão concluída! Acurácia: \${acuracia.toFixed(1)}% ⚠️\nDesempenho abaixo de 70%. Revisões mais frequentes agendadas.\`
+                  
+                  await Modal.alert('Sucesso!', msg, 'success')
+                  loadDashboard()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
               }
-            } catch (error) {
-              await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
+            }, '7')
+          }, '10')
+        }
+        
+        // Revisar por flashcard
+        async function revisarPorFlashcard(revisaoId, temaId, prevalencia) {
+          Modal.show({
+            title: 'Grau de Dificuldade',
+            content: \`
+              <p class="text-gray-700 mb-4">Qual foi seu grau de dificuldade nesta revisão?</p>
+              <div class="space-y-3">
+                <button id="dificuldade-facil" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                  <i class="fas fa-smile mr-2"></i>Fácil - Domino bem o tema
+                </button>
+                <button id="dificuldade-medio" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                  <i class="fas fa-meh mr-2"></i>Médio - Lembro com esforço
+                </button>
+                <button id="dificuldade-dificil" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                  <i class="fas fa-frown mr-2"></i>Difícil - Preciso revisar mais
+                </button>
+              </div>
+            \`,
+            type: 'question',
+            buttons: [
+              { label: 'Cancelar', primary: false, callback: () => {} }
+            ]
+          })
+          
+          setTimeout(() => {
+            const processarDificuldade = async (dificuldade) => {
+              document.body.querySelector('.fixed.inset-0')?.remove()
+              
+              // Mapear dificuldade para acurácia equivalente
+              const acuraciaMap = {
+                'facil': 90,
+                'medio': 70,
+                'dificil': 50
+              }
+              
+              try {
+                const res = await fetch(\`/api/revisao/concluir/\${revisaoId}\`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    acuracia_revisao: acuraciaMap[dificuldade],
+                    metodo: 'flashcard',
+                    dificuldade: dificuldade,
+                    tema_id: temaId,
+                    prevalencia_numero: prevalencia
+                  })
+                })
+
+                const data = await res.json()
+                if (data.success) {
+                  const msgs = {
+                    'facil': 'Revisão concluída! Você domina este tema. Intervalos mais longos aplicados. 😊',
+                    'medio': 'Revisão concluída! Continue praticando. Intervalos moderados mantidos. 📚',
+                    'dificil': 'Revisão concluída! Vamos revisar mais vezes este tema. Intervalos reduzidos. 💪'
+                  }
+                  
+                  await Modal.alert('Sucesso!', msgs[dificuldade], 'success')
+                  loadDashboard()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                await Modal.alert('Erro', 'Erro ao concluir revisão', 'error')
+              }
             }
-          }, '80')
+            
+            document.getElementById('dificuldade-facil')?.addEventListener('click', () => processarDificuldade('facil'))
+            document.getElementById('dificuldade-medio')?.addEventListener('click', () => processarDificuldade('medio'))
+            document.getElementById('dificuldade-dificil')?.addEventListener('click', () => processarDificuldade('dificil'))
+          }, 100)
         }
 
         // Gerar ciclo
