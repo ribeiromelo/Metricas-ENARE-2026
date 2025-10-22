@@ -1277,18 +1277,170 @@ app.get('/dashboard', async (c) => {
 
             <!-- Tab: Ciclo -->
             <div id="tab-ciclo" class="tab-content hidden">
-                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Gerador de Ciclo de 40 Semanas</h2>
-                    <p class="text-gray-600 mb-4">Distribui automaticamente 419 temas em 40 semanas, priorizando prevalência e balanceando áreas.</p>
-                    <button onclick="gerarCiclo()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold">
-                        <i class="fas fa-cogs mr-2"></i>Gerar Ciclo Agora
-                    </button>
+                <!-- Alerta do Ciclo Atual -->
+                <div id="alerta-ciclo" class="hidden mb-6"></div>
+
+                <!-- Seleção de Tipo de Ciclo -->
+                <div id="selecao-ciclo" class="mb-6">
+                    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-lg p-8 text-white mb-6">
+                        <h2 class="text-3xl font-bold mb-2">🧠 Ciclo de Estudos Adaptativo</h2>
+                        <p class="text-indigo-100">Escolha o tipo de ciclo ideal baseado no seu tempo disponível até a prova</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Extensivo -->
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-indigo-500">
+                            <div class="bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 class="text-2xl font-bold">📘 Extensivo</h3>
+                                    <div class="bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-semibold">40 semanas</div>
+                                </div>
+                                <p class="text-blue-100">Cobertura completa e aprofundada</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-3 mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Todos os 419 temas</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Alta + Média + Baixa prevalência</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Ritmo tranquilo (~10 temas/semana)</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-calendar-alt text-indigo-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-600 font-semibold">Recomendado: > 9 meses</span>
+                                    </div>
+                                </div>
+                                <button onclick="gerarCicloAdaptativo('extensivo')" 
+                                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition">
+                                    <i class="fas fa-rocket mr-2"></i>Gerar Ciclo Extensivo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Semi-intensivo -->
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-purple-500">
+                            <div class="bg-gradient-to-br from-purple-500 to-purple-600 p-6 text-white">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 class="text-2xl font-bold">📗 Semi-intensivo</h3>
+                                    <div class="bg-white text-purple-600 px-3 py-1 rounded-full text-sm font-semibold">20 semanas</div>
+                                </div>
+                                <p class="text-purple-100">Equilíbrio entre cobertura e intensidade</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-3 mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Alta + Média prevalência</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">~285 temas essenciais</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Ritmo moderado (~14 temas/semana)</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-calendar-alt text-indigo-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-600 font-semibold">Recomendado: 5-8 meses</span>
+                                    </div>
+                                </div>
+                                <button onclick="gerarCicloAdaptativo('semi-intensivo')" 
+                                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold transition">
+                                    <i class="fas fa-bolt mr-2"></i>Gerar Ciclo Semi-intensivo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Intensivo -->
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 border-transparent hover:border-red-500">
+                            <div class="bg-gradient-to-br from-red-500 to-red-600 p-6 text-white">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 class="text-2xl font-bold">🔥 Intensivo</h3>
+                                    <div class="bg-white text-red-600 px-3 py-1 rounded-full text-sm font-semibold">10 semanas</div>
+                                </div>
+                                <p class="text-red-100">Foco máximo no essencial</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="space-y-3 mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-fire text-red-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Alta prevalência prioritária</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-fire text-red-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">~150+ temas críticos</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-fire text-red-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-700">Ritmo acelerado (~15 temas/semana)</span>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <i class="fas fa-calendar-alt text-indigo-500 mt-1 mr-3"></i>
+                                        <span class="text-gray-600 font-semibold">Recomendado: < 5 meses</span>
+                                    </div>
+                                </div>
+                                <button onclick="gerarCicloAdaptativo('intensivo')" 
+                                    class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition">
+                                    <i class="fas fa-fire mr-2"></i>Gerar Ciclo Intensivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                        <div class="flex items-start">
+                            <i class="fas fa-info-circle text-blue-500 text-xl mr-3 mt-1"></i>
+                            <div>
+                                <p class="text-blue-900 font-semibold mb-1">💡 Como funciona a adaptação automática?</p>
+                                <p class="text-blue-800 text-sm">O sistema calcula automaticamente as semanas disponíveis até sua data da prova e adapta o ciclo escolhido. Se você tiver menos tempo que o padrão, a engine redistribui os temas de forma inteligente!</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Mapa de 40 Semanas</h2>
-                    <div id="mapa-semanas" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <p class="text-gray-600 col-span-4">Carregando...</p>
+                <!-- Visualização do Ciclo Atual -->
+                <div id="visualizacao-ciclo" class="hidden">
+                    <!-- Estatísticas do Ciclo -->
+                    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-2xl font-bold text-gray-800">
+                                <i class="fas fa-chart-line text-indigo-600 mr-2"></i>
+                                Seu Ciclo Atual
+                            </h2>
+                            <div class="space-x-2">
+                                <button onclick="pausarCiclo()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                    <i class="fas fa-pause mr-1"></i>Pausar
+                                </button>
+                                <button onclick="cancelarCiclo()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                    <i class="fas fa-times mr-1"></i>Cancelar
+                                </button>
+                                <button onclick="mostrarSelecaoCiclo()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                    <i class="fas fa-redo mr-1"></i>Novo Ciclo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="stats-ciclo" class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <!-- Stats dinâmicos -->
+                        </div>
+                    </div>
+
+                    <!-- Linha do Tempo -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-calendar-alt text-indigo-600 mr-2"></i>
+                            Linha do Tempo
+                        </h2>
+                        <div id="linha-tempo-semanas" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <!-- Semanas dinâmicas -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1732,6 +1884,7 @@ app.get('/dashboard', async (c) => {
             document.getElementById('tab-' + tabName).classList.remove('hidden')
             event.target.closest('.tab-btn').classList.add('active', 'bg-indigo-600', 'text-white')
 
+            if (tabName === 'ciclo') carregarCicloAtual()
             if (tabName === 'revisoes') loadRevisoes()
             if (tabName === 'metricas') loadMetricas()
         }
@@ -2140,6 +2293,283 @@ app.get('/dashboard', async (c) => {
             await Modal.alert('Erro', 'Erro ao carregar temas da semana', 'error')
           }
         }
+
+        // ====================================================
+        // FUNÇÕES DO CICLO ADAPTATIVO
+        // ====================================================
+
+        // Gerar ciclo adaptativo
+        async function gerarCicloAdaptativo(tipoCiclo) {
+          const tiposNome = {
+            'extensivo': 'Extensivo (40 semanas)',
+            'semi-intensivo': 'Semi-intensivo (20 semanas)',
+            'intensivo': 'Intensivo (10 semanas)'
+          }
+
+          Modal.confirm(
+            'Gerar Ciclo ' + tiposNome[tipoCiclo], 
+            'O sistema calculará automaticamente as semanas disponíveis até sua prova e adaptará o ciclo conforme necessário. Deseja continuar?',
+            async () => {
+              try {
+                const res = await fetch('/api/ciclo/gerar', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tipo_ciclo: tipoCiclo })
+                })
+                const data = await res.json()
+                
+                if (data.success) {
+                  // Mostrar alerta de sucesso com estatísticas
+                  const mensagemHTML = '<div class="text-left space-y-2">' +
+                    '<p class="font-semibold text-lg text-indigo-600">' + data.mensagem + '</p>' +
+                    '<div class="bg-gray-50 p-4 rounded-lg mt-3">' +
+                    '<p class="text-sm"><strong>Tipo:</strong> ' + data.estatisticas.tipo_ciclo + '</p>' +
+                    '<p class="text-sm"><strong>Semanas:</strong> ' + data.estatisticas.semanas_reais + '</p>' +
+                    '<p class="text-sm"><strong>Total de temas:</strong> ' + data.estatisticas.total_temas + '</p>' +
+                    '<p class="text-sm"><strong>Alta prevalência:</strong> ' + data.estatisticas.temas_alta + '</p>' +
+                    '<p class="text-sm"><strong>Média prevalência:</strong> ' + data.estatisticas.temas_media + '</p>' +
+                    '<p class="text-sm"><strong>Baixa prevalência:</strong> ' + data.estatisticas.temas_baixa + '</p>' +
+                    '<p class="text-sm"><strong>Temas por semana:</strong> ~' + data.estatisticas.temas_por_semana + '</p>' +
+                    '</div></div>'
+                  await Modal.alert('Ciclo Gerado com Sucesso! 🎉', mensagemHTML, 'success')
+                  
+                  // Atualizar visualização
+                  await carregarCicloAtual()
+                  loadDashboard()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                console.error('Erro ao gerar ciclo:', error)
+                await Modal.alert('Erro', 'Erro ao gerar ciclo adaptativo', 'error')
+              }
+            }
+          )
+        }
+
+        // Carregar ciclo atual
+        async function carregarCicloAtual() {
+          try {
+            const res = await fetch('/api/ciclo')
+            const data = await res.json()
+            
+            const selecaoDiv = document.getElementById('selecao-ciclo')
+            const visualizacaoDiv = document.getElementById('visualizacao-ciclo')
+            const alertaDiv = document.getElementById('alerta-ciclo')
+
+            if (data.ciclo) {
+              // Mostrar visualização do ciclo
+              selecaoDiv.classList.add('hidden')
+              visualizacaoDiv.classList.remove('hidden')
+
+              // Mostrar alerta se existir
+              if (data.ciclo.mensagem_alerta) {
+                alertaDiv.classList.remove('hidden')
+                const corAlerta = data.ciclo.semanas_reais < 10 ? 'red' : data.ciclo.semanas_reais < 20 ? 'yellow' : 'blue'
+                alertaDiv.innerHTML = \`
+                  <div class="bg-\${corAlerta}-50 border-l-4 border-\${corAlerta}-500 p-4 rounded">
+                    <div class="flex items-start">
+                      <i class="fas fa-info-circle text-\${corAlerta}-500 text-xl mr-3 mt-1"></i>
+                      <div>
+                        <p class="text-\${corAlerta}-900 font-semibold">\${data.ciclo.mensagem_alerta}</p>
+                      </div>
+                    </div>
+                  </div>
+                \`
+              }
+
+              // Renderizar estatísticas
+              const statsDiv = document.getElementById('stats-ciclo')
+              const tipoCicloNome = {
+                'extensivo': 'Extensivo',
+                'semi-intensivo': 'Semi-intensivo',
+                'intensivo': 'Intensivo'
+              }
+
+              statsDiv.innerHTML = \`
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                  <p class="text-xs text-indigo-600 font-semibold uppercase">Tipo</p>
+                  <p class="text-2xl font-bold text-indigo-600">\${tipoCicloNome[data.ciclo.tipo_ciclo]}</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg">
+                  <p class="text-xs text-blue-600 font-semibold uppercase">Semanas</p>
+                  <p class="text-2xl font-bold text-blue-600">\${data.ciclo.semanas_reais}</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                  <p class="text-xs text-green-600 font-semibold uppercase">Total Temas</p>
+                  <p class="text-2xl font-bold text-green-600">\${data.ciclo.temas_alta + data.ciclo.temas_media + data.ciclo.temas_baixa}</p>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                  <p class="text-xs text-purple-600 font-semibold uppercase">Progresso</p>
+                  <p class="text-2xl font-bold text-purple-600">\${data.ciclo.progresso_atual}%</p>
+                </div>
+                <div class="bg-orange-50 p-4 rounded-lg">
+                  <p class="text-xs text-orange-600 font-semibold uppercase">Status</p>
+                  <p class="text-lg font-bold text-orange-600">\${data.ciclo.status === 'ativo' ? '✅ Ativo' : data.ciclo.status === 'pausado' ? '⏸️ Pausado' : '❌ Cancelado'}</p>
+                </div>
+              \`
+
+              // Renderizar semanas
+              renderizarLinhaDoTempo(data.semanas)
+            } else {
+              // Mostrar seleção de ciclo
+              selecaoDiv.classList.remove('hidden')
+              visualizacaoDiv.classList.add('hidden')
+              alertaDiv.classList.add('hidden')
+            }
+          } catch (error) {
+            console.error('Erro ao carregar ciclo:', error)
+          }
+        }
+
+        // Renderizar linha do tempo
+        function renderizarLinhaDoTempo(semanas) {
+          const linhaTempoDiv = document.getElementById('linha-tempo-semanas')
+          
+          if (semanas && semanas.length > 0) {
+            linhaTempoDiv.innerHTML = semanas.map(s => {
+              const statusColor = s.status === 'concluida' ? 'green' : s.status === 'em_andamento' ? 'yellow' : 'gray'
+              const statusIcon = s.status === 'concluida' ? 'fa-check-circle' : s.status === 'em_andamento' ? 'fa-spinner' : 'fa-circle'
+              
+              return \`
+                <div class="border-2 border-\${statusColor}-200 rounded-lg p-4 hover:shadow-lg transition cursor-pointer bg-\${statusColor === 'green' ? 'green-50' : 'white'}"
+                     onclick="verTemasDoNovoCiclo(\${s.id}, \${s.numero_semana})">
+                  <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-bold text-gray-800">Semana \${s.numero_semana}</h3>
+                    <i class="fas \${statusIcon} text-\${statusColor}-500"></i>
+                  </div>
+                  <p class="text-xs text-gray-600 mb-2">
+                    \${new Date(s.data_inicio).toLocaleDateString('pt-BR')} - \${new Date(s.data_fim).toLocaleDateString('pt-BR')}
+                  </p>
+                  <div class="space-y-1">
+                    <p class="text-sm text-gray-700">\${s.temas_planejados} temas</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                      <div class="bg-\${statusColor}-500 h-2 rounded-full" style="width: \${(s.temas_concluidos / s.temas_planejados * 100) || 0}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500">\${s.temas_concluidos}/\${s.temas_planejados} concluídos</p>
+                  </div>
+                  <p class="text-xs text-indigo-600 mt-2"><i class="fas fa-eye mr-1"></i>Ver temas</p>
+                </div>
+              \`
+            }).join('')
+          } else {
+            linhaTempoDiv.innerHTML = '<p class="text-gray-600 col-span-4">Nenhuma semana no ciclo.</p>'
+          }
+        }
+
+        // Ver temas de uma semana do novo ciclo
+        async function verTemasDoNovoCiclo(semanaId, numeroSemana) {
+          try {
+            const res = await fetch('/api/ciclo')
+            const data = await res.json()
+            
+            const semana = data.semanas.find(s => s.id === semanaId)
+            if (!semana || !semana.temas || semana.temas.length === 0) {
+              await Modal.alert('Sem Temas', 'Esta semana não possui temas.', 'info')
+              return
+            }
+
+            const temasHTML = semana.temas.map(t => \`
+              <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
+                    <p class="text-sm text-gray-600 mt-1">
+                      <i class="fas fa-folder mr-1"></i>\${t.area} · \${t.subarea}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">\${t.subtopicos || ''}</p>
+                    <div class="flex items-center mt-2 space-x-3">
+                      <span class="text-xs px-2 py-1 rounded \${t.prevalencia === 'ALTA' ? 'bg-red-100 text-red-700' : t.prevalencia === 'MÉDIA' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
+                        \${t.prevalencia}
+                      </span>
+                      <span class="text-xs text-gray-600">
+                        <i class="fas fa-check-circle \${t.status === 'concluido' ? 'text-green-500' : 'text-gray-300'} mr-1"></i>
+                        \${t.status === 'concluido' ? 'Concluído' : t.status === 'em_andamento' ? 'Em andamento' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            \`).join('')
+            
+            Modal.show({
+              title: \`Semana \${numeroSemana} - \${semana.temas.length} Temas\`,
+              content: \`
+                <div class="max-h-96 overflow-y-auto space-y-3">
+                  \${temasHTML}
+                </div>
+              \`,
+              type: 'info',
+              buttons: [
+                { label: 'Fechar', primary: true, callback: () => {} }
+              ]
+            })
+          } catch (error) {
+            console.error('Erro ao carregar temas:', error)
+            await Modal.alert('Erro', 'Erro ao carregar temas da semana', 'error')
+          }
+        }
+
+        // Pausar ciclo
+        async function pausarCiclo() {
+          Modal.confirm(
+            'Pausar Ciclo',
+            'Você poderá reativar o ciclo depois. Tem certeza?',
+            async () => {
+              try {
+                const res = await fetch('/api/ciclo/pausar', { method: 'POST' })
+                const data = await res.json()
+                
+                if (data.success) {
+                  await Modal.alert('Sucesso', 'Ciclo pausado com sucesso!', 'success')
+                  await carregarCicloAtual()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                await Modal.alert('Erro', 'Erro ao pausar ciclo', 'error')
+              }
+            }
+          )
+        }
+
+        // Cancelar ciclo
+        async function cancelarCiclo() {
+          Modal.confirm(
+            'Cancelar Ciclo',
+            'Esta ação NÃO pode ser desfeita! Você perderá todo o progresso. Tem certeza?',
+            async () => {
+              try {
+                const res = await fetch('/api/ciclo/cancelar', { method: 'POST' })
+                const data = await res.json()
+                
+                if (data.success) {
+                  await Modal.alert('Ciclo Cancelado', 'Você pode gerar um novo ciclo agora.', 'info')
+                  await carregarCicloAtual()
+                } else {
+                  await Modal.alert('Erro', data.error, 'error')
+                }
+              } catch (error) {
+                await Modal.alert('Erro', 'Erro ao cancelar ciclo', 'error')
+              }
+            }
+          )
+        }
+
+        // Mostrar seleção de ciclo
+        function mostrarSelecaoCiclo() {
+          Modal.confirm(
+            'Gerar Novo Ciclo',
+            'Isso cancelará o ciclo atual. Deseja continuar?',
+            async () => {
+              await cancelarCiclo()
+            }
+          )
+        }
+
+        // ====================================================
+        // FIM FUNÇÕES DO CICLO ADAPTATIVO
+        // ====================================================
 
         // Carregar revisões
         async function loadRevisoes() {
