@@ -1198,7 +1198,7 @@ app.get('/dashboard', async (c) => {
                     <i class="fas fa-home mr-2"></i>Dashboard
                 </button>
                 <button onclick="showTab('ciclo')" class="tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
-                    <i class="fas fa-calendar-alt mr-2"></i>Ciclo 40 Semanas
+                    <i class="fas fa-calendar-alt mr-2"></i>Ciclo de Estudos
                 </button>
                 <button onclick="showTab('revisoes')" class="tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
                     <i class="fas fa-sync-alt mr-2"></i>Revisões
@@ -2589,8 +2589,8 @@ app.post('/api/auth/registro', async (c) => {
   try {
     const { email, senha, nome, data_prova } = await c.req.json()
 
-    if (!email || !senha || !nome) {
-      return c.json({ error: 'Email, senha e nome são obrigatórios' }, 400)
+    if (!email || !senha || !nome || !data_prova) {
+      return c.json({ error: 'Email, senha, nome e data da prova são obrigatórios' }, 400)
     }
 
     // Verificar se email já existe
@@ -2608,7 +2608,7 @@ app.post('/api/auth/registro', async (c) => {
     const result = await DB.prepare(`
       INSERT INTO usuarios (email, senha_hash, nome, data_prova)
       VALUES (?, ?, ?, ?)
-    `).bind(email, senhaHash, nome, data_prova || null).run()
+    `).bind(email, senhaHash, nome, data_prova).run()
 
     const usuarioId = result.meta.last_row_id
 
@@ -2616,7 +2616,7 @@ app.post('/api/auth/registro', async (c) => {
     await DB.prepare(`
       INSERT INTO configuracoes (usuario_id, horas_por_dia, temas_por_dia, data_prova, semana_atual, ciclo_gerado)
       VALUES (?, 4, 4, ?, 1, 0)
-    `).bind(usuarioId, data_prova || null).run()
+    `).bind(usuarioId, data_prova).run()
 
     // Criar sessão
     const token = gerarToken()
@@ -3386,9 +3386,13 @@ app.get('/login', (c) => {
                         placeholder="Mínimo 6 caracteres">
                 </div>
                 <div>
-                    <label class="block text-gray-700 font-semibold mb-2">Data da Prova (opcional)</label>
-                    <input type="date" id="registro-data-prova"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-gray-700 font-semibold mb-2">Data da Prova <span class="text-red-600">*</span></label>
+                    <input type="date" id="registro-data-prova" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        min="<?= date('Y-m-d') ?>">
+                    <p class="text-sm text-gray-600 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>Necessário para gerar seu ciclo de estudos personalizado
+                    </p>
                 </div>
                 <button type="submit"
                     class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
@@ -4656,6 +4660,294 @@ app.delete('/api/admin/temas/:id', async (c) => {
   try {
     await DB.prepare('DELETE FROM temas WHERE id = ?').bind(temaId).run()
     return c.json({ success: true })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// ====================================================
+// CICLO DE ESTUDOS ADAPTATIVOS
+// ====================================================
+
+// Função auxiliar: calcular semanas entre duas datas
+function calcularSemanas(dataInicio: Date, dataFim: Date): number {
+  const diffTime = Math.abs(dataFim.getTime() - dataInicio.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return Math.floor(diffDays / 7)
+}
+
+// Função auxiliar: calcular distribuição de temas por tipo de ciclo
+function calcularDistribuicaoTemas(tipoCiclo: string, semanasReais: number, temas: any[]) {
+  const temasAlta = temas.filter(t => t.prevalencia_numero === 5)
+  const temasMedia = temas.filter(t => t.prevalencia_numero === 3)
+  const temasBaixa = temas.filter(t => t.prevalencia_numero === 1)
+
+  let temasDistribuir: any[] = []
+  let mensagemAlerta = ''
+
+  if (tipoCiclo === 'extensivo') {
+    // Extensivo: todos os temas (Alta + Média + Baixa)
+    temasDistribuir = [...temasAlta, ...temasMedia, ...temasBaixa]
+    mensagemAlerta = semanasReais < 40 
+      ? `Ciclo Extensivo adaptado para ${semanasReais} semanas. Cobertura completa mantida com maior densidade.`
+      : `Ciclo Extensivo de ${semanasReais} semanas gerado com sucesso!`
+  } else if (tipoCiclo === 'semi-intensivo') {
+    // Semi-intensivo: Alta + Média
+    temasDistribuir = [...temasAlta, ...temasMedia]
+    mensagemAlerta = semanasReais < 20
+      ? `Ciclo Semi-intensivo adaptado para ${semanasReais} semanas. Foco em Alta e Média prevalência.`
+      : `Ciclo Semi-intensivo de ${semanasReais} semanas gerado com sucesso!`
+  } else if (tipoCiclo === 'intensivo') {
+    // Intensivo: Alta prevalência + parte de Média (proporcional ao tempo)
+    const percentualMedia = Math.min(1, semanasReais / 10) // até 100% de média em 10 semanas
+    const quantidadeMedia = Math.floor(temasMedia.length * percentualMedia)
+    temasDistribuir = [...temasAlta, ...temasMedia.slice(0, quantidadeMedia)]
+    
+    if (semanasReais < 6) {
+      mensagemAlerta = `⚠️ ATENÇÃO: Apenas ${semanasReais} semanas até a prova! Foco MÁXIMO em temas de Alta prevalência.`
+    } else if (semanasReais < 10) {
+      mensagemAlerta = `Ciclo Intensivo de ${semanasReais} semanas. Cobertura de Alta prevalência + ${quantidadeMedia} temas de Média.`
+    } else {
+      mensagemAlerta = `Ciclo Intensivo de ${semanasReais} semanas gerado com sucesso!`
+    }
+  }
+
+  // Distribuir temas por área de forma balanceada
+  const temasOrdenados = temasDistribuir.sort((a, b) => {
+    if (a.prevalencia_numero !== b.prevalencia_numero) {
+      return b.prevalencia_numero - a.prevalencia_numero // Alta primeiro
+    }
+    return a.area.localeCompare(b.area) // Depois por área
+  })
+
+  return {
+    temas: temasOrdenados,
+    alta: temasAlta.filter(t => temasOrdenados.includes(t)).length,
+    media: temasMedia.filter(t => temasOrdenados.includes(t)).length,
+    baixa: temasBaixa.filter(t => temasOrdenados.includes(t)).length,
+    mensagem: mensagemAlerta
+  }
+}
+
+// API: Obter ciclo atual do usuário
+app.get('/api/ciclo', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
+
+  try {
+    const cicloAtivo = await DB.prepare(`
+      SELECT * FROM ciclos_estudo 
+      WHERE usuario_id = ? AND status = 'ativo'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).bind(usuarioId).first()
+
+    if (!cicloAtivo) {
+      return c.json({ ciclo: null })
+    }
+
+    // Buscar semanas do ciclo
+    const semanas = await DB.prepare(`
+      SELECT * FROM ciclo_semanas
+      WHERE ciclo_id = ?
+      ORDER BY numero_semana ASC
+    `).bind(cicloAtivo.id).all()
+
+    // Para cada semana, buscar os temas
+    const semanasComTemas = await Promise.all(
+      (semanas.results || []).map(async (semana: any) => {
+        const temas = await DB.prepare(`
+          SELECT cst.*, t.tema, t.area, t.subarea, t.prevalencia
+          FROM ciclo_semana_temas cst
+          INNER JOIN temas t ON cst.tema_id = t.id
+          WHERE cst.ciclo_semana_id = ?
+          ORDER BY cst.ordem ASC
+        `).bind(semana.id).all()
+
+        return {
+          ...semana,
+          temas: temas.results || []
+        }
+      })
+    )
+
+    return c.json({
+      ciclo: cicloAtivo,
+      semanas: semanasComTemas
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// API: Gerar novo ciclo de estudos
+app.post('/api/ciclo/gerar', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
+
+  try {
+    const { tipo_ciclo } = await c.req.json()
+
+    if (!tipo_ciclo || !['extensivo', 'semi-intensivo', 'intensivo'].includes(tipo_ciclo)) {
+      return c.json({ error: 'Tipo de ciclo inválido' }, 400)
+    }
+
+    // Buscar data da prova do usuário
+    const usuario = await DB.prepare('SELECT data_prova FROM usuarios WHERE id = ?').bind(usuarioId).first()
+
+    if (!usuario || !usuario.data_prova) {
+      return c.json({ error: 'Data da prova não definida. Configure a data da prova primeiro.' }, 400)
+    }
+
+    const hoje = new Date()
+    const dataProva = new Date(usuario.data_prova)
+
+    // Calcular semanas disponíveis
+    const semanasDisponiveis = calcularSemanas(hoje, dataProva)
+
+    if (semanasDisponiveis < 1) {
+      return c.json({ error: 'A data da prova já passou ou é muito próxima (menos de 1 semana).' }, 400)
+    }
+
+    // Definir semanas planejadas padrão por tipo
+    const semanasPadrao = {
+      'extensivo': 40,
+      'semi-intensivo': 20,
+      'intensivo': 10
+    }
+
+    const semanasPlanejadas = semanasPadrao[tipo_ciclo as keyof typeof semanasPadrao]
+    const semanasReais = Math.min(semanasDisponiveis, semanasPlanejadas)
+
+    // Buscar todos os temas
+    const todosTemas = await DB.prepare(`
+      SELECT * FROM temas
+      ORDER BY prevalencia_numero DESC, area, tema
+    `).all()
+
+    // Calcular distribuição de temas
+    const distribuicao = calcularDistribuicaoTemas(tipo_ciclo, semanasReais, todosTemas.results || [])
+
+    // Cancelar ciclo anterior se existir
+    await DB.prepare(`
+      UPDATE ciclos_estudo 
+      SET status = 'cancelado'
+      WHERE usuario_id = ? AND status = 'ativo'
+    `).bind(usuarioId).run()
+
+    // Criar novo ciclo
+    const resultCiclo = await DB.prepare(`
+      INSERT INTO ciclos_estudo (
+        usuario_id, tipo_ciclo, semanas_planejadas, semanas_reais,
+        data_inicio, data_prova, temas_alta, temas_media, temas_baixa,
+        mensagem_alerta, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo')
+    `).bind(
+      usuarioId, tipo_ciclo, semanasPlanejadas, semanasReais,
+      hoje.toISOString().split('T')[0], usuario.data_prova,
+      distribuicao.alta, distribuicao.media, distribuicao.baixa,
+      distribuicao.mensagem
+    ).run()
+
+    const cicloId = resultCiclo.meta.last_row_id
+
+    // Distribuir temas pelas semanas
+    const temasPorSemana = Math.ceil(distribuicao.temas.length / semanasReais)
+
+    for (let numSemana = 1; numSemana <= semanasReais; numSemana++) {
+      const dataInicioSemana = new Date(hoje)
+      dataInicioSemana.setDate(hoje.getDate() + (numSemana - 1) * 7)
+      
+      const dataFimSemana = new Date(dataInicioSemana)
+      dataFimSemana.setDate(dataInicioSemana.getDate() + 6)
+
+      // Criar semana
+      const resultSemana = await DB.prepare(`
+        INSERT INTO ciclo_semanas (
+          ciclo_id, numero_semana, data_inicio, data_fim
+        ) VALUES (?, ?, ?, ?)
+      `).bind(
+        cicloId, numSemana,
+        dataInicioSemana.toISOString().split('T')[0],
+        dataFimSemana.toISOString().split('T')[0]
+      ).run()
+
+      const semanaId = resultSemana.meta.last_row_id
+
+      // Selecionar temas para esta semana
+      const indiceInicio = (numSemana - 1) * temasPorSemana
+      const indiceFim = Math.min(indiceInicio + temasPorSemana, distribuicao.temas.length)
+      const temasSemana = distribuicao.temas.slice(indiceInicio, indiceFim)
+
+      // Inserir temas da semana
+      for (let ordem = 0; ordem < temasSemana.length; ordem++) {
+        await DB.prepare(`
+          INSERT INTO ciclo_semana_temas (
+            ciclo_semana_id, tema_id, ordem
+          ) VALUES (?, ?, ?)
+        `).bind(semanaId, temasSemana[ordem].id, ordem + 1).run()
+      }
+
+      // Atualizar contador de temas planejados na semana
+      await DB.prepare(`
+        UPDATE ciclo_semanas
+        SET temas_planejados = ?
+        WHERE id = ?
+      `).bind(temasSemana.length, semanaId).run()
+    }
+
+    return c.json({
+      success: true,
+      ciclo_id: cicloId,
+      mensagem: distribuicao.mensagem,
+      estatisticas: {
+        tipo_ciclo,
+        semanas_planejadas: semanasPlanejadas,
+        semanas_reais: semanasReais,
+        total_temas: distribuicao.temas.length,
+        temas_alta: distribuicao.alta,
+        temas_media: distribuicao.media,
+        temas_baixa: distribuicao.baixa,
+        temas_por_semana: temasPorSemana
+      }
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// API: Cancelar/Pausar ciclo atual
+app.post('/api/ciclo/:acao', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
+  const acao = c.req.param('acao')
+
+  if (!['pausar', 'cancelar', 'reativar'].includes(acao)) {
+    return c.json({ error: 'Ação inválida' }, 400)
+  }
+
+  try {
+    const novoStatus = acao === 'pausar' ? 'pausado' : acao === 'cancelar' ? 'cancelado' : 'ativo'
+
+    await DB.prepare(`
+      UPDATE ciclos_estudo
+      SET status = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE usuario_id = ? AND status IN ('ativo', 'pausado')
+    `).bind(novoStatus, usuarioId).run()
+
+    return c.json({ success: true, novo_status: novoStatus })
 
   } catch (error: any) {
     return c.json({ error: error.message }, 500)
