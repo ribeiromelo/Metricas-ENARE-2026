@@ -902,6 +902,54 @@ app.get('/api/config', async (c) => {
   }
 })
 
+// ====================================================
+// IMPORTAR TEMAS (endpoint temporário - REMOVER DEPOIS)
+// ====================================================
+app.post('/api/import-temas', async (c) => {
+  const { DB } = c.env
+  
+  try {
+    // Verificar se já existem temas
+    const count = await DB.prepare('SELECT COUNT(*) as total FROM temas').first()
+    
+    if (count && count.total > 0) {
+      return c.json({ error: 'Temas já foram importados anteriormente', total: count.total }, 400)
+    }
+
+    // Receber array de temas do body
+    const { temas } = await c.req.json()
+    
+    if (!temas || !Array.isArray(temas)) {
+      return c.json({ error: 'Body deve conter array "temas"' }, 400)
+    }
+
+    // Inserir todos os temas
+    let inserted = 0
+    for (const tema of temas) {
+      await DB.prepare(`
+        INSERT INTO temas (area, subarea, tema, subtopicos, prevalencia, prevalencia_numero, prioridade, origem, observacoes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        tema.area,
+        tema.subarea,
+        tema.tema,
+        tema.subtopicos || '',
+        tema.prevalencia,
+        tema.prevalencia_numero,
+        tema.prioridade || 1,
+        tema.origem || '',
+        tema.observacoes || ''
+      ).run()
+      inserted++
+    }
+    
+    return c.json({ success: true, temas_importados: inserted })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
 app.post('/api/config', async (c) => {
   const { DB } = c.env
   
