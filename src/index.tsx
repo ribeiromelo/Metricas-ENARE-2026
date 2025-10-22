@@ -4507,8 +4507,10 @@ app.get('/api/admin/usuarios/:id/detalhes', async (c) => {
 
     // Revisões pendentes
     const revisoesPendentes = await DB.prepare(`
-      SELECT COUNT(*) as count FROM revisoes 
-      WHERE usuario_id = ? AND concluida = 0
+      SELECT COUNT(*) as count 
+      FROM revisoes r
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE e.usuario_id = ? AND r.concluida = 0
     `).bind(userId).first()
 
     // Performance por área
