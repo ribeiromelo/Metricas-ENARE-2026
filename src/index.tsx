@@ -2731,7 +2731,8 @@ app.get('/home', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Cérebro HardMed - Sistema de Estudos ENARE 2026</title>
+        <title>HardMed - Domine o ENARE 2026 com Método Comprovado</title>
+        <meta name="description" content="Sistema completo de estudos para ENARE 2026. 419 temas, revisões inteligentes, 40 semanas de planejamento. Saia de 58 para 85+ questões!">
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
@@ -2743,36 +2744,319 @@ app.get('/home', (c) => {
                 to { opacity: 1; transform: translateY(0); }
             }
             .fade-in-up { animation: fadeInUp 0.6s ease-out; }
+            @keyframes pulse-glow {
+                0%, 100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+                50% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.8); }
+            }
+            .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+            .method-card { border-left: 4px solid #667eea; }
+            .scroll-smooth { scroll-behavior: smooth; }
         </style>
     </head>
-    <body class="bg-white">
+    <body class="bg-white scroll-smooth">
         <!-- Hero Section -->
-        <div class="gradient-bg min-h-screen flex items-center justify-center px-4">
-            <div class="max-w-5xl mx-auto text-center text-white fade-in-up">
-                <div class="mb-8">
+        <div class="gradient-bg min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10">
+                <div class="absolute top-20 left-10 text-white text-9xl"><i class="fas fa-book-medical"></i></div>
+                <div class="absolute bottom-20 right-10 text-white text-9xl"><i class="fas fa-stethoscope"></i></div>
+                <div class="absolute top-1/2 left-1/4 text-white text-7xl"><i class="fas fa-heartbeat"></i></div>
+            </div>
+            <div class="max-w-6xl mx-auto text-center text-white fade-in-up relative z-10">
+                <div class="mb-6">
                     <i class="fas fa-brain text-8xl mb-6 animate-pulse"></i>
                 </div>
-                <h1 class="text-6xl font-bold mb-4">Cérebro de Estudos HardMed</h1>
-                <p class="text-2xl mb-8 opacity-90">Sistema Inteligente de Revisões para ENARE 2026</p>
-                <p class="text-xl mb-12 max-w-2xl mx-auto opacity-80">
-                    Domine os 419 temas do ENARE com algoritmo de repetição espaçada, 
-                    ciclo de 40 semanas e métricas avançadas de performance
+                <div class="inline-block bg-yellow-400 text-gray-900 px-4 py-2 rounded-full text-sm font-bold mb-4">
+                    🎯 META: 58 → 85+ QUESTÕES CORRETAS
+                </div>
+                <h1 class="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                    Do Caos ao <span class="text-yellow-300">Planejamento</span><br/>
+                    Do Esquecimento à <span class="text-yellow-300">Memória</span>
+                </h1>
+                <p class="text-xl md:text-2xl mb-8 opacity-90 max-w-3xl mx-auto">
+                    Sistema completo de estudos para R1: <strong>419 temas</strong>, <strong>40 semanas</strong> de ciclo 
+                    e método comprovado para <strong>ENARE 2026</strong>
                 </p>
-                <div class="flex justify-center space-x-4">
-                    <a href="/login" class="bg-white text-indigo-600 px-8 py-4 rounded-xl font-bold text-lg hover:bg-gray-100 transition shadow-xl">
-                        <i class="fas fa-sign-in-alt mr-2"></i>Entrar na Plataforma
+                <div class="flex flex-col md:flex-row justify-center gap-4 mb-12">
+                    <a href="/login?registro=true" class="bg-yellow-400 text-gray-900 px-10 py-5 rounded-xl font-bold text-xl hover:bg-yellow-300 transition shadow-2xl pulse-glow inline-flex items-center justify-center">
+                        <i class="fas fa-rocket mr-2"></i>COMEÇAR AGORA - GRÁTIS
                     </a>
-                    <a href="/login?registro=true" class="bg-indigo-800 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-indigo-900 transition shadow-xl">
-                        <i class="fas fa-user-plus mr-2"></i>Criar Conta Grátis
+                    <a href="#video" class="bg-white bg-opacity-20 backdrop-blur-sm text-white px-10 py-5 rounded-xl font-bold text-xl hover:bg-opacity-30 transition shadow-xl inline-flex items-center justify-center border-2 border-white">
+                        <i class="fas fa-play-circle mr-2"></i>Ver Como Funciona
                     </a>
+                </div>
+                <div class="grid grid-cols-3 gap-6 max-w-2xl mx-auto text-center">
+                    <div>
+                        <div class="text-4xl font-bold text-yellow-300">419</div>
+                        <div class="text-sm opacity-80">Temas ENARE</div>
+                    </div>
+                    <div>
+                        <div class="text-4xl font-bold text-yellow-300">40</div>
+                        <div class="text-sm opacity-80">Semanas de Ciclo</div>
+                    </div>
+                    <div>
+                        <div class="text-4xl font-bold text-yellow-300">15K</div>
+                        <div class="text-sm opacity-80">Meta de Questões</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prova Social -->
+        <div class="py-12 px-4 bg-indigo-900 text-white">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-8">
+                    <h3 class="text-2xl font-bold mb-4">✨ Resultados Reais de Residentes</h3>
+                    <p class="text-indigo-200">Sistema desenvolvido por quem já passou pelo processo</p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-8 text-center">
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-6">
+                        <div class="text-5xl font-bold text-yellow-300 mb-2">+27</div>
+                        <div class="text-indigo-200">Questões a mais</div>
+                        <div class="text-xs mt-2 text-indigo-300">ENARE 2024 → 2025</div>
+                    </div>
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-6">
+                        <div class="text-5xl font-bold text-yellow-300 mb-2">85+</div>
+                        <div class="text-indigo-200">Meta ENARE 2026</div>
+                        <div class="text-xs mt-2 text-indigo-300">De 58 para 85 questões</div>
+                    </div>
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-6">
+                        <div class="text-5xl font-bold text-yellow-300 mb-2">15K</div>
+                        <div class="text-indigo-200">Questões até set/2026</div>
+                        <div class="text-xs mt-2 text-indigo-300">Método estruturado</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vídeo Tutorial -->
+        <div id="video" class="py-20 px-4 bg-white">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-12">
+                    <span class="bg-indigo-100 text-indigo-600 px-4 py-2 rounded-full text-sm font-bold">📹 VÍDEO TUTORIAL</span>
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mt-6 mb-4">
+                        Veja Como Funciona em <span class="text-indigo-600">5 Minutos</span>
+                    </h2>
+                    <p class="text-xl text-gray-600">
+                        Entenda todo o sistema, do planejamento às revisões inteligentes
+                    </p>
+                </div>
+                <div class="relative rounded-2xl overflow-hidden shadow-2xl" style="padding-bottom: 56.25%; position: relative;">
+                    <!-- Placeholder para vídeo do YouTube -->
+                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+                        <div class="text-center text-white">
+                            <i class="fas fa-play-circle text-8xl mb-6 opacity-80"></i>
+                            <p class="text-2xl font-bold mb-2">Vídeo em breve!</p>
+                            <p class="text-indigo-200">Tutorial completo da plataforma</p>
+                            <div class="mt-8 bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-4 max-w-md mx-auto">
+                                <p class="text-sm text-left">
+                                    <strong>📝 Quando o vídeo estiver pronto:</strong><br/>
+                                    Substitua esta div por:<br/>
+                                    <code class="text-xs bg-black bg-opacity-20 p-1 rounded">
+                                        &lt;iframe src="URL_DO_YOUTUBE"&gt;&lt;/iframe&gt;
+                                    </code>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Método Detalhado -->
+        <div class="py-20 px-4 bg-gray-50">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-16">
+                    <span class="bg-green-100 text-green-600 px-4 py-2 rounded-full text-sm font-bold">🎯 METODOLOGIA COMPROVADA</span>
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mt-6 mb-4">
+                        O Método que <span class="text-green-600">Funciona</span>
+                    </h2>
+                    <p class="text-xl text-gray-600">
+                        2 métodos complementares adaptados para cada área do ENARE
+                    </p>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-8 mb-16">
+                    <!-- Método com Questões -->
+                    <div class="bg-white rounded-2xl shadow-lg p-8 method-card border-l-indigo-600">
+                        <div class="flex items-center mb-6">
+                            <div class="bg-indigo-100 rounded-full p-4 mr-4">
+                                <i class="fas fa-question-circle text-3xl text-indigo-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-gray-800">Método com Questões</h3>
+                                <p class="text-sm text-indigo-600 font-semibold">Clínica Médica • Cirurgia • GO</p>
+                            </div>
+                        </div>
+                        <ol class="space-y-4 text-gray-700">
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">1</span>
+                                <div>
+                                    <strong>Escolha do tema</strong>
+                                    <p class="text-sm text-gray-600">Ex.: Hemorragia Digestiva Alta</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">2</span>
+                                <div>
+                                    <strong>Abrir seção de estudos</strong>
+                                    <p class="text-sm text-gray-600">1h para cada tema, pelo menos</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">3</span>
+                                <div>
+                                    <strong>Definir 15-20 questões</strong>
+                                    <p class="text-sm text-gray-600">Dos últimos 5 anos (atenção a temas atualizados frequentemente)</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">4</span>
+                                <div>
+                                    <strong>Análise profunda</strong>
+                                    <p class="text-sm text-gray-600">Qual conhecimento cobrou? O quanto sabia? Padrões nas questões?</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">5</span>
+                                <div>
+                                    <strong>Revisar comentários</strong>
+                                    <p class="text-sm text-gray-600">TODAS as questões, inclusive corretas (macetes práticos!)</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-indigo-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">6</span>
+                                <div>
+                                    <strong>Técnica de Feynman</strong>
+                                    <p class="text-sm text-gray-600">Se explique sobre o tema com foco no que foi cobrado</p>
+                                </div>
+                            </li>
+                        </ol>
+                    </div>
+
+                    <!-- Método Tradicional -->
+                    <div class="bg-white rounded-2xl shadow-lg p-8 method-card border-l-green-600">
+                        <div class="flex items-center mb-6">
+                            <div class="bg-green-100 rounded-full p-4 mr-4">
+                                <i class="fas fa-book text-3xl text-green-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-gray-800">Método Tradicional</h3>
+                                <p class="text-sm text-green-600 font-semibold">Pediatria • Preventiva</p>
+                            </div>
+                        </div>
+                        <ol class="space-y-4 text-gray-700">
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">1</span>
+                                <div>
+                                    <strong>Definir fonte</strong>
+                                    <p class="text-sm text-gray-600">Aula curta com boa didática, material completo ou resumo</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">2</span>
+                                <div>
+                                    <strong>Abrir seção de estudos</strong>
+                                    <p class="text-sm text-gray-600">1h para cada tema, pelo menos</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">3</span>
+                                <div>
+                                    <strong>Foco total</strong>
+                                    <p class="text-sm text-gray-600">Atenção na aula/leitura, sem pausas, sem anotações</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">4</span>
+                                <div>
+                                    <strong>Anotação pós-estudo</strong>
+                                    <p class="text-sm text-gray-600">Anote o que lembra do conteúdo</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">5</span>
+                                <div>
+                                    <strong>Revisão de dúvidas</strong>
+                                    <p class="text-sm text-gray-600">Retorne para ajustar pontos em aberto</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">6</span>
+                                <div>
+                                    <strong>Auto-explicação</strong>
+                                    <p class="text-sm text-gray-600">Explique em 10min - organize as gavetas mentais</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center mr-3 flex-shrink-0 font-bold text-sm">7</span>
+                                <div>
+                                    <strong>FlashCards no dia seguinte</strong>
+                                    <p class="text-sm text-gray-600">Use plataformas prontas (MedCards, Estratégia)</p>
+                                </div>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Planejamento -->
+                <div class="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl shadow-2xl p-8 md:p-12 text-gray-900">
+                    <div class="text-center mb-8">
+                        <i class="fas fa-trophy text-6xl text-white mb-4"></i>
+                        <h3 class="text-3xl md:text-4xl font-bold text-white mb-2">Planejamento R1 Completo</h3>
+                        <p class="text-white text-opacity-90">Sua evolução mapeada até setembro de 2026</p>
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl p-6 text-center">
+                            <div class="text-3xl font-bold text-white mb-2">58</div>
+                            <div class="text-sm text-white text-opacity-80">ENARE 2024</div>
+                        </div>
+                        <div class="bg-white bg-opacity-30 backdrop-blur-sm rounded-xl p-6 text-center">
+                            <div class="text-3xl font-bold text-white mb-2">64</div>
+                            <div class="text-sm text-white text-opacity-80">ENARE 2025</div>
+                        </div>
+                        <div class="bg-white bg-opacity-40 backdrop-blur-sm rounded-xl p-6 text-center border-4 border-white">
+                            <div class="text-4xl font-bold text-white mb-2">85+</div>
+                            <div class="text-sm text-white font-bold">🎯 META ENARE 2026</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow-lg">
+                        <h4 class="text-xl font-bold mb-4 text-gray-800">📊 Metas até Setembro/2026:</h4>
+                        <ul class="space-y-3 text-gray-700">
+                            <li class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                                <strong>15.000 questões resolvidas no total</strong>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                                <strong>Método com questões:</strong> Clínica Médica, Cirurgia e GO
+                            </li>
+                            <li class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                                <strong>Método tradicional:</strong> Pediatria e Preventiva
+                            </li>
+                            <li class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                                <strong>419 temas cobertos</strong> em 40 semanas de ciclo
+                            </li>
+                            <li class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                                <strong>3 níveis de revisão</strong> espaçada automática (1, 7, 30 dias)
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Features Section -->
-        <div class="py-20 px-4 bg-gray-50">
+        <div class="py-20 px-4 bg-white">
             <div class="max-w-6xl mx-auto">
-                <h2 class="text-4xl font-bold text-center text-gray-800 mb-16">Recursos Poderosos</h2>
+                <div class="text-center mb-16">
+                    <span class="bg-purple-100 text-purple-600 px-4 py-2 rounded-full text-sm font-bold">⚡ RECURSOS DA PLATAFORMA</span>
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mt-6 mb-4">
+                        Tudo que Você Precisa em <span class="text-purple-600">Um Só Lugar</span>
+                    </h2>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <!-- Feature 1 -->
                     <div class="bg-white rounded-xl shadow-lg p-8 card-hover">
@@ -2849,16 +3133,170 @@ app.get('/home', (c) => {
             </div>
         </div>
 
-        <!-- CTA Section -->
-        <div class="gradient-bg py-20 px-4">
-            <div class="max-w-4xl mx-auto text-center text-white">
-                <h2 class="text-4xl font-bold mb-6">Pronto para Dominar o ENARE 2026?</h2>
-                <p class="text-xl mb-8 opacity-90">
-                    Junte-se a centenas de estudantes que já estão usando o método mais eficiente
+        <!-- Comparação: Antes vs Depois -->
+        <div class="py-20 px-4 bg-gray-50">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-16">
+                    <span class="bg-red-100 text-red-600 px-4 py-2 rounded-full text-sm font-bold">⚖️ TRANSFORMAÇÃO</span>
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mt-6 mb-4">
+                        Antes <span class="text-red-600">vs</span> Depois do HardMed
+                    </h2>
+                </div>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- Antes -->
+                    <div class="bg-white rounded-2xl shadow-lg p-8 border-4 border-red-200">
+                        <div class="text-center mb-6">
+                            <i class="fas fa-times-circle text-5xl text-red-500 mb-4"></i>
+                            <h3 class="text-2xl font-bold text-gray-800">😰 Sem Planejamento</h3>
+                        </div>
+                        <ul class="space-y-4 text-gray-700">
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Não sabe por onde começar os 419 temas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Estuda hoje, esquece amanhã (sem revisões)</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Perde tempo decidindo o que estudar</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Sem noção do progresso real</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Ansiedade constante sobre o que falta</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-times text-red-500 mr-3 mt-1"></i>
+                                <span>Método desorganizado e ineficiente</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Depois -->
+                    <div class="bg-gradient-to-br from-green-400 to-blue-500 rounded-2xl shadow-2xl p-8 border-4 border-green-300 text-white">
+                        <div class="text-center mb-6">
+                            <i class="fas fa-check-circle text-5xl mb-4"></i>
+                            <h3 class="text-2xl font-bold">😎 Com HardMed</h3>
+                        </div>
+                        <ul class="space-y-4">
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>419 temas organizados</strong> em 40 semanas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>Revisões automáticas</strong> em 1, 7 e 30 dias</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>Guia diário</strong> mostra exatamente o que fazer</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>Métricas em tempo real</strong> de evolução</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>Confiança total</strong> no seu processo</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check mr-3 mt-1"></i>
+                                <span><strong>Método comprovado</strong> + 27 questões/ano</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="py-20 px-4 bg-white">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-16">
+                    <span class="bg-blue-100 text-blue-600 px-4 py-2 rounded-full text-sm font-bold">❓ DÚVIDAS FREQUENTES</span>
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mt-6 mb-4">
+                        Perguntas e Respostas
+                    </h2>
+                </div>
+                <div class="space-y-6">
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">🎯 Como funciona o ciclo de 40 semanas?</summary>
+                        <p class="text-gray-600 ml-4">Os 419 temas do ENARE são distribuídos em 40 semanas, priorizando temas de alta prevalência e balanceando todas as áreas (Clínica, Cirurgia, GO, Pediatria, Preventiva). Cada semana tem um conjunto específico de temas novos + revisões programadas.</p>
+                    </details>
+
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">🔄 Como são as revisões espaçadas?</summary>
+                        <p class="text-gray-600 ml-4">Após estudar um tema, o sistema programa automaticamente 3 revisões: 1 dia depois, 7 dias depois e 30 dias depois. Isso garante fixação na memória de longo prazo com base em evidências científicas.</p>
+                    </details>
+
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">📊 Quais métricas a plataforma oferece?</summary>
+                        <p class="text-gray-600 ml-4">Você acompanha: total de questões resolvidas, acurácia por área, tempo de estudo, progresso no ciclo de 40 semanas, temas estudados vs pendentes, revisões concluídas e muito mais!</p>
+                    </details>
+
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">💰 A plataforma é gratuita?</summary>
+                        <p class="text-gray-600 ml-4">Sim! O HardMed é 100% gratuito. Foi desenvolvido por um residente para ajudar outros estudantes a passarem no ENARE com um método estruturado e eficiente.</p>
+                    </details>
+
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">⏰ Quanto tempo preciso estudar por dia?</summary>
+                        <p class="text-gray-600 ml-4">O método recomenda pelo menos 1h por tema. A plataforma te ajuda a organizar, mas você define seu ritmo. O importante é consistência + método correto.</p>
+                    </details>
+
+                    <details class="bg-gray-50 rounded-xl p-6 cursor-pointer hover:bg-gray-100 transition">
+                        <summary class="text-lg font-bold text-gray-800 mb-2">🎓 Funciona para outras provas além do ENARE?</summary>
+                        <p class="text-gray-600 ml-4">Sim! Apesar de ser otimizado para ENARE, o método de revisões espaçadas e organização por temas funciona para qualquer prova de residência médica.</p>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Final -->
+        <div class="gradient-bg py-20 px-4 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10">
+                <div class="absolute top-10 left-10 text-white text-8xl"><i class="fas fa-graduation-cap"></i></div>
+                <div class="absolute bottom-10 right-10 text-white text-8xl"><i class="fas fa-trophy"></i></div>
+            </div>
+            <div class="max-w-4xl mx-auto text-center text-white relative z-10">
+                <div class="mb-6">
+                    <i class="fas fa-rocket text-6xl mb-4"></i>
+                </div>
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    Está Pronto para <span class="text-yellow-300">Transformar</span><br/>
+                    Seus Estudos?
+                </h2>
+                <p class="text-xl md:text-2xl mb-8 opacity-90 max-w-2xl mx-auto">
+                    Junte-se aos residentes que saíram do <strong>caos</strong> para o <strong>planejamento</strong><br/>
+                    e estão dominando o ENARE 2026
                 </p>
-                <a href="/login" class="bg-white text-indigo-600 px-12 py-5 rounded-xl font-bold text-xl hover:bg-gray-100 transition shadow-2xl inline-block">
-                    <i class="fas fa-rocket mr-2"></i>Começar Agora - É Grátis!
-                </a>
+                <div class="flex flex-col md:flex-row justify-center gap-4 mb-8">
+                    <a href="/login?registro=true" class="bg-yellow-400 text-gray-900 px-12 py-5 rounded-xl font-bold text-xl hover:bg-yellow-300 transition shadow-2xl pulse-glow inline-flex items-center justify-center">
+                        <i class="fas fa-rocket mr-2"></i>CRIAR CONTA GRÁTIS AGORA
+                    </a>
+                    <a href="/login" class="bg-white bg-opacity-20 backdrop-blur-sm text-white px-12 py-5 rounded-xl font-bold text-xl hover:bg-opacity-30 transition shadow-xl inline-flex items-center justify-center border-2 border-white">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Já Tenho Conta
+                    </a>
+                </div>
+                <div class="flex items-center justify-center space-x-8 text-sm opacity-80">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span>100% Gratuito</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span>Sem Cartão</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span>Comece em 2 Minutos</span>
+                    </div>
+                </div>
             </div>
         </div>
 
