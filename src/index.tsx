@@ -2551,7 +2551,7 @@ async function requireAuth(c: any) {
 
   const hoje = new Date().toISOString()
   const sessao = await DB.prepare(`
-    SELECT s.*, u.id as usuario_id, u.email, u.nome, u.data_prova
+    SELECT s.*, u.id as usuario_id, u.email, u.nome, u.data_prova, u.is_admin
     FROM sessoes s
     INNER JOIN usuarios u ON s.usuario_id = u.id
     WHERE s.token = ? AND s.expires_at > ?
@@ -2562,6 +2562,18 @@ async function requireAuth(c: any) {
   }
 
   return { usuario: sessao }
+}
+
+// Middleware para verificar se é administrador
+async function requireAdmin(c: any) {
+  const auth = await requireAuth(c)
+  if (auth.error) return auth
+  
+  if (!auth.usuario.is_admin) {
+    return { error: 'Acesso negado: apenas administradores', status: 403 }
+  }
+  
+  return auth
 }
 
 // API: Registro
@@ -3054,6 +3066,412 @@ app.get('/login', (c) => {
     </body>
     </html>
   `)
+})
+
+// ====================================================
+// ADMIN: DASHBOARD
+// ====================================================
+app.get('/admin', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) {
+    return c.redirect('/login')
+  }
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🛠️ Painel Admin - HardMed</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-gray-100 min-h-screen">
+        <!-- Header Admin -->
+        <header class="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 shadow-2xl">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-white bg-opacity-20 p-3 rounded-xl">
+                            <i class="fas fa-shield-alt text-white text-3xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-3xl font-bold text-white">Painel do Administrador</h1>
+                            <p class="text-pink-100">Gerenciamento da Plataforma HardMed</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-white transition">
+                            <i class="fas fa-home mr-2"></i>Voltar ao Sistema
+                        </a>
+                        <button onclick="logout()" class="bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg text-white transition">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Sair
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Tabs -->
+            <div class="flex space-x-2 mb-6">
+                <button onclick="showAdminTab('overview')" class="admin-tab-btn active px-6 py-3 bg-white rounded-lg shadow font-semibold">
+                    <i class="fas fa-chart-line mr-2"></i>Visão Geral
+                </button>
+                <button onclick="showAdminTab('usuarios')" class="admin-tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
+                    <i class="fas fa-users mr-2"></i>Usuários
+                </button>
+                <button onclick="showAdminTab('temas')" class="admin-tab-btn px-6 py-3 bg-white rounded-lg shadow font-semibold">
+                    <i class="fas fa-book mr-2"></i>Temas
+                </button>
+            </div>
+
+            <!-- Tab: Visão Geral -->
+            <div id="admin-tab-overview" class="admin-tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <!-- Card: Total Usuários -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm">Total de Usuários</p>
+                                <p class="text-4xl font-bold text-indigo-600" id="admin-total-users">--</p>
+                            </div>
+                            <i class="fas fa-users text-5xl text-indigo-200"></i>
+                        </div>
+                    </div>
+
+                    <!-- Card: Total Temas -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm">Total de Temas</p>
+                                <p class="text-4xl font-bold text-green-600" id="admin-total-temas">--</p>
+                            </div>
+                            <i class="fas fa-book text-5xl text-green-200"></i>
+                        </div>
+                    </div>
+
+                    <!-- Card: Total Estudos -->
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-600 text-sm">Total de Estudos</p>
+                                <p class="text-4xl font-bold text-purple-600" id="admin-total-estudos">--</p>
+                            </div>
+                            <i class="fas fa-graduation-cap text-5xl text-purple-200"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Atividade -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-chart-bar text-indigo-600 mr-2"></i>Estatísticas da Plataforma
+                    </h2>
+                    <div id="admin-stats" class="space-y-4">
+                        <p class="text-gray-600">Carregando estatísticas...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Usuários -->
+            <div id="admin-tab-usuarios" class="admin-tab-content hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">
+                            <i class="fas fa-users text-indigo-600 mr-2"></i>Gerenciar Usuários
+                        </h2>
+                        <input type="text" id="search-users" placeholder="Buscar usuário..." class="px-4 py-2 border rounded-lg">
+                    </div>
+                    <div id="admin-users-list" class="space-y-2">
+                        <p class="text-gray-600">Carregando usuários...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Temas -->
+            <div id="admin-tab-temas" class="admin-tab-content hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">
+                            <i class="fas fa-book text-indigo-600 mr-2"></i>Gerenciar Temas
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button onclick="showAddTemaModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                                <i class="fas fa-plus mr-2"></i>Adicionar Tema
+                            </button>
+                            <input type="text" id="search-temas" placeholder="Buscar tema..." class="px-4 py-2 border rounded-lg">
+                        </div>
+                    </div>
+                    <div id="admin-temas-list" class="space-y-2">
+                        <p class="text-gray-600">Carregando temas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Tabs
+            function showAdminTab(tabName) {
+                document.querySelectorAll('.admin-tab-content').forEach(tab => tab.classList.add('hidden'))
+                document.querySelectorAll('.admin-tab-btn').forEach(btn => btn.classList.remove('active', 'bg-indigo-600', 'text-white'))
+                
+                document.getElementById(\`admin-tab-\${tabName}\`).classList.remove('hidden')
+                event.target.closest('.admin-tab-btn').classList.add('active', 'bg-indigo-600', 'text-white')
+                
+                if (tabName === 'overview') loadAdminOverview()
+                if (tabName === 'usuarios') loadAdminUsers()
+                if (tabName === 'temas') loadAdminTemas()
+            }
+
+            // Load Overview
+            async function loadAdminOverview() {
+                const res = await fetch('/api/admin/stats')
+                const data = await res.json()
+                
+                document.getElementById('admin-total-users').textContent = data.total_usuarios || 0
+                document.getElementById('admin-total-temas').textContent = data.total_temas || 0
+                document.getElementById('admin-total-estudos').textContent = data.total_estudos || 0
+                
+                document.getElementById('admin-stats').innerHTML = \`
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border-l-4 border-indigo-500 pl-4">
+                            <p class="text-gray-600 text-sm">Usuários Ativos (últimos 7 dias)</p>
+                            <p class="text-2xl font-bold">\${data.usuarios_ativos_7d || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-green-500 pl-4">
+                            <p class="text-gray-600 text-sm">Estudos Hoje</p>
+                            <p class="text-2xl font-bold">\${data.estudos_hoje || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-purple-500 pl-4">
+                            <p class="text-gray-600 text-sm">Revisões Pendentes</p>
+                            <p class="text-2xl font-bold">\${data.revisoes_pendentes || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-orange-500 pl-4">
+                            <p class="text-gray-600 text-sm">Questões Resolvidas (Total)</p>
+                            <p class="text-2xl font-bold">\${data.questoes_total || 0}</p>
+                        </div>
+                    </div>
+                \`
+            }
+
+            // Load Users
+            async function loadAdminUsers() {
+                const res = await fetch('/api/admin/usuarios')
+                const data = await res.json()
+                
+                const listDiv = document.getElementById('admin-users-list')
+                if (data.usuarios && data.usuarios.length > 0) {
+                    listDiv.innerHTML = data.usuarios.map(u => \`
+                        <div class="border rounded-lg p-4 hover:border-indigo-400 transition flex items-center justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-bold text-gray-800">\${u.nome}</h3>
+                                <p class="text-sm text-gray-600">\${u.email}</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Cadastro: \${new Date(u.created_at).toLocaleDateString('pt-BR')} · 
+                                    Último acesso: \${u.last_login ? new Date(u.last_login).toLocaleDateString('pt-BR') : 'Nunca'}
+                                    \${u.is_admin ? ' · <span class="text-red-600 font-bold">ADMIN</span>' : ''}
+                                </p>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="viewUserDetails(\${u.id})" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-eye mr-1"></i>Detalhes
+                                </button>
+                            </div>
+                        </div>
+                    \`).join('')
+                } else {
+                    listDiv.innerHTML = '<p class="text-gray-600">Nenhum usuário encontrado</p>'
+                }
+            }
+
+            // Load Temas
+            async function loadAdminTemas() {
+                const res = await fetch('/api/admin/temas')
+                const data = await res.json()
+                
+                const listDiv = document.getElementById('admin-temas-list')
+                if (data.temas && data.temas.length > 0) {
+                    listDiv.innerHTML = data.temas.map(t => \`
+                        <div class="border rounded-lg p-4 hover:border-indigo-400 transition">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-gray-800">\${t.tema}</h3>
+                                    <p class="text-sm text-gray-600">\${t.area} › \${t.subarea}</p>
+                                    <p class="text-sm text-gray-500 mt-1">\${t.subtopicos || 'Sem subtópicos'}</p>
+                                    <p class="text-xs text-indigo-600 mt-2">
+                                        Prevalência: \${t.prevalencia} (\${t.prevalencia_numero}) · 
+                                        Prioridade: \${t.prioridade || 'N/A'}
+                                    </p>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="editTema(\${t.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="deleteTema(\${t.id}, '\${t.tema.replace(/'/g, "\\\\'")}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    \`).join('')
+                } else {
+                    listDiv.innerHTML = '<p class="text-gray-600">Nenhum tema encontrado</p>'
+                }
+            }
+
+            // View User Details
+            async function viewUserDetails(userId) {
+                const res = await fetch(\`/api/admin/usuarios/\${userId}\`)
+                const data = await res.json()
+                alert(\`Usuário: \${data.usuario.nome}\\nEmail: \${data.usuario.email}\\nTotal Estudos: \${data.total_estudos}\\nTotal Questões: \${data.total_questoes}\`)
+            }
+
+            // Adicionar Tema (placeholder)
+            function showAddTemaModal() {
+                alert('Função em desenvolvimento: Adicionar novo tema')
+            }
+
+            // Editar Tema (placeholder)
+            function editTema(id) {
+                alert('Função em desenvolvimento: Editar tema ' + id)
+            }
+
+            // Deletar Tema
+            async function deleteTema(id, nome) {
+                if (!confirm(\`Tem certeza que deseja excluir o tema "\${nome}"?\`)) return
+                
+                const res = await fetch(\`/api/admin/temas/\${id}\`, { method: 'DELETE' })
+                const data = await res.json()
+                
+                if (data.success) {
+                    alert('Tema excluído com sucesso!')
+                    loadAdminTemas()
+                } else {
+                    alert('Erro: ' + data.error)
+                }
+            }
+
+            function logout() {
+                document.cookie = 'auth_token=; path=/; max-age=0'
+                window.location.href = '/login'
+            }
+
+            // Load initial
+            loadAdminOverview()
+        </script>
+    </body>
+    </html>
+  `)
+})
+
+// ====================================================
+// ADMIN: APIs
+// ====================================================
+app.get('/api/admin/stats', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const hoje = getDataISOBrasil()
+  
+  try {
+    const stats = await DB.prepare(`
+      SELECT 
+        (SELECT COUNT(*) FROM usuarios) as total_usuarios,
+        (SELECT COUNT(*) FROM temas) as total_temas,
+        (SELECT COUNT(*) FROM estudos) as total_estudos,
+        (SELECT COUNT(*) FROM estudos WHERE data_estudo = ?) as estudos_hoje,
+        (SELECT COALESCE(SUM(questoes_feitas), 0) FROM estudos) as questoes_total,
+        (SELECT COUNT(*) FROM revisoes WHERE concluida = 0) as revisoes_pendentes,
+        (SELECT COUNT(DISTINCT usuario_id) FROM estudos WHERE data_estudo >= date('now', '-7 days')) as usuarios_ativos_7d
+    `).bind(hoje).first()
+
+    return c.json(stats)
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.get('/api/admin/usuarios', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  
+  try {
+    const usuarios = await DB.prepare(`
+      SELECT id, email, nome, data_prova, is_admin, created_at, last_login
+      FROM usuarios
+      ORDER BY created_at DESC
+    `).all()
+
+    return c.json({ usuarios: usuarios.results })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.get('/api/admin/usuarios/:id', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const userId = c.req.param('id')
+  
+  try {
+    const usuario = await DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(userId).first()
+    const totalEstudos = await DB.prepare('SELECT COUNT(*) as total FROM estudos WHERE usuario_id = ?').bind(userId).first()
+    const totalQuestoes = await DB.prepare('SELECT SUM(questoes_feitas) as total FROM estudos WHERE usuario_id = ?').bind(userId).first()
+
+    return c.json({ 
+      usuario, 
+      total_estudos: totalEstudos?.total || 0,
+      total_questoes: totalQuestoes?.total || 0
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.get('/api/admin/temas', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  
+  try {
+    const temas = await DB.prepare(`
+      SELECT * FROM temas
+      ORDER BY prevalencia_numero DESC, area, tema
+    `).all()
+
+    return c.json({ temas: temas.results })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.delete('/api/admin/temas/:id', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const temaId = c.req.param('id')
+  
+  try {
+    await DB.prepare('DELETE FROM temas WHERE id = ?').bind(temaId).run()
+    return c.json({ success: true })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
 })
 
 export default app
