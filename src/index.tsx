@@ -2556,7 +2556,7 @@ async function requireAuth(c: any) {
 
   const hoje = new Date().toISOString()
   const sessao = await DB.prepare(`
-    SELECT s.id as sessao_id, s.usuario_id, s.token, s.expires_at, 
+    SELECT s.id as sessao_id, s.token, s.expires_at, 
            u.id as usuario_id, u.email, u.nome, u.data_prova, u.is_admin
     FROM sessoes s
     INNER JOIN usuarios u ON s.usuario_id = u.id
