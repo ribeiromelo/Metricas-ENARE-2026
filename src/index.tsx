@@ -4466,6 +4466,30 @@ app.get('/api/admin/usuarios/:id/detalhes', async (c) => {
       return c.json({ error: 'Usuário não encontrado' }, 404)
     }
 
+    // Verificar se a tabela estudos existe
+    const tableCheck = await DB.prepare(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='estudos'
+    `).first()
+
+    // Se não tem tabela, retornar dados vazios
+    if (!tableCheck) {
+      return c.json({
+        usuario,
+        stats: {
+          total_estudos: 0,
+          total_questoes: 0,
+          tempo_total_minutos: 0,
+          tempo_medio_minutos: 0,
+          acuracia_media: 0,
+          dias_estudo: 0,
+          temas_estudados: 0,
+          revisoes_pendentes: 0
+        },
+        por_area: [],
+        evolucao: []
+      })
+    }
+
     // Estatísticas gerais
     const stats = await DB.prepare(`
       SELECT 
@@ -4518,8 +4542,8 @@ app.get('/api/admin/usuarios/:id/detalhes', async (c) => {
         ...stats,
         revisoes_pendentes: revisoesPendentes?.count || 0
       },
-      por_area: porArea.results,
-      evolucao: evolucao.results
+      por_area: porArea.results || [],
+      evolucao: evolucao.results || []
     })
 
   } catch (error: any) {
