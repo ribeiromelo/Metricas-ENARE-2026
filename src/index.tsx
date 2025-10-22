@@ -2,6 +2,31 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 
+// ====================================================
+// HELPER: DATA/HORA DO BRASIL (UTC-3)
+// ====================================================
+function getDataBrasil(): Date {
+  // Cria data atual em UTC e ajusta para Brasil (UTC-3)
+  const agora = new Date()
+  const brazilTime = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  return brazilTime
+}
+
+function formatarDataBR(dataISO: string): string {
+  const data = new Date(dataISO + 'T00:00:00-03:00') // Force Brazil timezone
+  return data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+}
+
+function getDataISOBrasil(diasParaAdicionar: number = 0): string {
+  const data = getDataBrasil()
+  data.setDate(data.getDate() + diasParaAdicionar)
+  // Retorna apenas a parte da data no formato YYYY-MM-DD
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
 // Types
 type Bindings = {
   DB: D1Database
@@ -225,12 +250,14 @@ app.get('/api/semanas', async (c) => {
   const usuarioId = auth.usuario.usuario_id
   
   try {
+    // CRITICAL FIX: Count completed themes by tema_id (not semana_tema_id)
+    // Same theme studied in any week should count as completed
     const semanasResult = await DB.prepare(`
       SELECT s.*, 
         COUNT(st.id) as total_temas,
         SUM(CASE WHEN EXISTS(
           SELECT 1 FROM estudos e 
-          WHERE e.semana_tema_id = st.id AND e.usuario_id = ?
+          WHERE e.tema_id = st.tema_id AND e.usuario_id = ?
         ) THEN 1 ELSE 0 END) as temas_concluidos
       FROM semanas s
       LEFT JOIN semana_temas st ON st.semana_id = s.id
@@ -304,7 +331,7 @@ app.post('/api/estudo/registrar', async (c) => {
     }
 
     const acuracia = questoes_feitas > 0 ? (questoes_acertos / questoes_feitas) * 100 : 0
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = getDataISOBrasil() // Use Brazil timezone
 
     // Inserir estudo
     const estudoResult = await DB.prepare(`
@@ -320,17 +347,16 @@ app.post('/api/estudo/registrar', async (c) => {
     // Calcular intervalos de revisão
     const intervalos = calcularIntervalos(tema.prevalencia_numero, acuracia)
 
-    // Criar revisões com intervalos cumulativos
+    // Criar revisões com intervalos cumulativos usando timezone do Brasil
     let diasAcumulados = 0
     for (let i = 0; i < intervalos.length; i++) {
       diasAcumulados += intervalos[i]
-      const dataAgendada = new Date()
-      dataAgendada.setDate(dataAgendada.getDate() + diasAcumulados)
+      const dataAgendada = getDataISOBrasil(diasAcumulados) // Use Brazil timezone
       
       await DB.prepare(`
         INSERT INTO revisoes (estudo_id, tema_id, numero_revisao, data_agendada, intervalo_dias)
         VALUES (?, ?, ?, ?, ?)
-      `).bind(estudoId, tema_id, i + 1, dataAgendada.toISOString().split('T')[0], intervalos[i]).run()
+      `).bind(estudoId, tema_id, i + 1, dataAgendada, intervalos[i]).run()
     }
 
     return c.json({ 
@@ -366,6 +392,9 @@ function calcularIntervalos(prevalencia: number, acuracia: number): number[] {
     intervalos = intervalos.map(i => Math.floor(i * 1.4)) // 40% mais lento
   }
 
+  // GARANTIR que o primeiro intervalo seja sempre no mínimo 1 dia
+  intervalos = intervalos.map(i => Math.max(1, i))
+
   return intervalos
 }
 
@@ -380,7 +409,7 @@ app.get('/api/revisoes/pendentes', async (c) => {
   const usuarioId = auth.usuario.usuario_id
   
   try {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = getDataISOBrasil() // Use Brazil timezone
 
     const revisoesResult = await DB.prepare(`
       SELECT r.*, t.tema, t.area, t.prevalencia, t.prevalencia_numero
@@ -424,7 +453,7 @@ app.post('/api/revisao/concluir/:id', async (c) => {
       dificuldade
     } = body
 
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = getDataISOBrasil() // Use Brazil timezone
 
     // Marcar revisão como concluída
     await DB.prepare(`
@@ -445,12 +474,11 @@ app.post('/api/revisao/concluir/:id', async (c) => {
       revisaoAtual.numero_revisao
     )
 
-    // Criar novas revisões com intervalos cumulativos a partir de hoje
+    // Criar novas revisões com intervalos cumulativos usando timezone do Brasil
     let diasAcumulados = 0
     for (let i = 0; i < intervalos.length; i++) {
       diasAcumulados += intervalos[i]
-      const dataAgendada = new Date()
-      dataAgendada.setDate(dataAgendada.getDate() + diasAcumulados)
+      const dataAgendada = getDataISOBrasil(diasAcumulados) // Use Brazil timezone
       
       await DB.prepare(`
         INSERT INTO revisoes (estudo_id, tema_id, numero_revisao, data_agendada, intervalo_dias)
@@ -459,7 +487,7 @@ app.post('/api/revisao/concluir/:id', async (c) => {
         revisaoAtual.estudo_id, 
         tema_id, 
         revisaoAtual.numero_revisao + i + 1, 
-        dataAgendada.toISOString().split('T')[0], 
+        dataAgendada, 
         intervalos[i]
       ).run()
     }
@@ -523,15 +551,91 @@ app.get('/api/metricas', async (c) => {
   const usuarioId = auth.usuario.usuario_id
   
   try {
+    const hoje = getDataISOBrasil()
+
+    // ============ MÉTRICAS BÁSICAS ============
+    
     // Total de estudos
     const totalEstudos = await DB.prepare('SELECT COUNT(*) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
 
     // Total de questões feitas
     const totalQuestoes = await DB.prepare('SELECT SUM(questoes_feitas) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
 
+    // Horas totais de estudo
+    const horasTotais = await DB.prepare('SELECT SUM(tempo_minutos) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
+
     // Acurácia média geral
     const acuraciaMedia = await DB.prepare('SELECT AVG(acuracia) as media FROM estudos WHERE acuracia > 0 AND usuario_id = ?').bind(usuarioId).first()
 
+    // ============ STREAK E CONSISTÊNCIA ============
+    
+    // Dias de estudo consecutivos (streak)
+    const diasEstudo = await DB.prepare(`
+      SELECT DISTINCT data_estudo FROM estudos 
+      WHERE usuario_id = ? 
+      ORDER BY data_estudo DESC
+      LIMIT 30
+    `).bind(usuarioId).all()
+    
+    let streak = 0
+    if (diasEstudo.results.length > 0) {
+      const dataHoje = new Date(hoje)
+      let dataVerificar = new Date(hoje)
+      
+      for (const registro of diasEstudo.results) {
+        const dataEstudo = new Date(registro.data_estudo)
+        const diffDias = Math.floor((dataVerificar.getTime() - dataEstudo.getTime()) / (1000 * 60 * 60 * 24))
+        
+        if (diffDias <= 1) {
+          streak++
+          dataVerificar = dataEstudo
+        } else {
+          break
+        }
+      }
+    }
+
+    // Média de questões por dia
+    const diasComEstudo = await DB.prepare(`
+      SELECT COUNT(DISTINCT data_estudo) as dias FROM estudos WHERE usuario_id = ?
+    `).bind(usuarioId).first()
+    const mediaDiaria = diasComEstudo?.dias > 0 ? (totalQuestoes?.total || 0) / diasComEstudo.dias : 0
+
+    // ============ REVISÕES ============
+    
+    // Revisões pendentes
+    const revisoesPendentes = await DB.prepare(`
+      SELECT COUNT(*) as total FROM revisoes r
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE r.concluida = 0 AND r.data_agendada <= ? AND e.usuario_id = ?
+    `).bind(hoje, usuarioId).first()
+
+    // Total de revisões concluídas
+    const revisoesConcluidas = await DB.prepare(`
+      SELECT COUNT(*) as total FROM revisoes r
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE r.concluida = 1 AND e.usuario_id = ?
+    `).bind(usuarioId).first()
+
+    // Taxa de sucesso em revisões (>70%)
+    const revisoesComSucesso = await DB.prepare(`
+      SELECT COUNT(*) as total FROM revisoes r
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE r.concluida = 1 AND r.acuracia_revisao >= 70 AND e.usuario_id = ?
+    `).bind(usuarioId).first()
+    const taxaSucessoRevisoes = (revisoesConcluidas?.total || 0) > 0 
+      ? ((revisoesComSucesso?.total || 0) / revisoesConcluidas.total) * 100 
+      : 0
+
+    // Revisões em atraso
+    const revisoesAtrasadas = await DB.prepare(`
+      SELECT COUNT(*) as total FROM revisoes r
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE r.concluida = 0 AND r.data_agendada < ? AND e.usuario_id = ?
+    `).bind(hoje, usuarioId).first()
+
+    // ============ ANÁLISE POR ÁREA ============
+    
     // Acurácia por área
     const acuraciaPorArea = await DB.prepare(`
       SELECT t.area, AVG(e.acuracia) as media_acuracia, COUNT(e.id) as total_estudos
@@ -539,34 +643,244 @@ app.get('/api/metricas', async (c) => {
       INNER JOIN temas t ON e.tema_id = t.id
       WHERE e.acuracia > 0 AND e.usuario_id = ?
       GROUP BY t.area
-      ORDER BY media_acuracia ASC
+      ORDER BY media_acuracia DESC
     `).bind(usuarioId).all()
 
-    // Temas mais errados
-    const temasMaisErrados = await DB.prepare(`
-      SELECT t.tema, t.area, AVG(e.acuracia) as media_acuracia
+    // Distribuição de estudos por área (para gráfico pizza)
+    const distribuicaoPorArea = await DB.prepare(`
+      SELECT t.area, COUNT(e.id) as total
       FROM estudos e
       INNER JOIN temas t ON e.tema_id = t.id
-      WHERE e.acuracia > 0
+      WHERE e.usuario_id = ?
+      GROUP BY t.area
+      ORDER BY total DESC
+    `).bind(usuarioId).all()
+
+    // ============ ANÁLISE POR PREVALÊNCIA ============
+    
+    const performancePorPrevalencia = await DB.prepare(`
+      SELECT t.prevalencia, AVG(e.acuracia) as media_acuracia, COUNT(e.id) as total_estudos
+      FROM estudos e
+      INNER JOIN temas t ON e.tema_id = t.id
+      WHERE e.acuracia > 0 AND e.usuario_id = ?
+      GROUP BY t.prevalencia
+      ORDER BY t.prevalencia_numero DESC
+    `).bind(usuarioId).all()
+
+    // ============ TEMAS E RANKINGS ============
+    
+    // Temas mais errados (<70%)
+    const temasMaisErrados = await DB.prepare(`
+      SELECT t.tema, t.area, AVG(e.acuracia) as media_acuracia, COUNT(e.id) as vezes_estudado
+      FROM estudos e
+      INNER JOIN temas t ON e.tema_id = t.id
+      WHERE e.acuracia > 0 AND e.usuario_id = ?
       GROUP BY e.tema_id
       HAVING AVG(e.acuracia) < 70
       ORDER BY media_acuracia ASC
       LIMIT 10
-    `).all()
+    `).bind(usuarioId).all()
 
-    // Revisões pendentes
-    const hoje = new Date().toISOString().split('T')[0]
-    const revisoesPendentes = await DB.prepare(`
-      SELECT COUNT(*) as total FROM revisoes WHERE concluida = 0 AND data_agendada <= ?
-    `).bind(hoje).first()
+    // Temas dominados (>90%)
+    const temasDominados = await DB.prepare(`
+      SELECT t.tema, t.area, AVG(e.acuracia) as media_acuracia, COUNT(e.id) as vezes_estudado
+      FROM estudos e
+      INNER JOIN temas t ON e.tema_id = t.id
+      WHERE e.acuracia > 0 AND e.usuario_id = ?
+      GROUP BY e.tema_id
+      HAVING AVG(e.acuracia) >= 90
+      ORDER BY media_acuracia DESC
+      LIMIT 10
+    `).bind(usuarioId).all()
+
+    // Temas mais revisados
+    const temasMaisRevisados = await DB.prepare(`
+      SELECT t.tema, t.area, COUNT(r.id) as total_revisoes
+      FROM revisoes r
+      INNER JOIN temas t ON r.tema_id = t.id
+      INNER JOIN estudos e ON r.estudo_id = e.id
+      WHERE e.usuario_id = ?
+      GROUP BY r.tema_id
+      ORDER BY total_revisoes DESC
+      LIMIT 10
+    `).bind(usuarioId).all()
+
+    // ============ PROGRESSO DO CICLO ============
+    
+    // Total de semanas no ciclo
+    const totalSemanas = await DB.prepare(`
+      SELECT COUNT(*) as total FROM semanas WHERE usuario_id = ?
+    `).bind(usuarioId).first()
+
+    // Temas totais do ciclo
+    const temasTotaisCiclo = await DB.prepare(`
+      SELECT COUNT(*) as total FROM semana_temas st
+      INNER JOIN semanas s ON st.semana_id = s.id
+      WHERE s.usuario_id = ?
+    `).bind(usuarioId).first()
+
+    // Temas já estudados
+    const temasEstudados = await DB.prepare(`
+      SELECT COUNT(DISTINCT tema_id) as total FROM estudos WHERE usuario_id = ?
+    `).bind(usuarioId).first()
+
+    const percentualConclusao = (temasTotaisCiclo?.total || 0) > 0 
+      ? ((temasEstudados?.total || 0) / temasTotaisCiclo.total) * 100 
+      : 0
+
+    // ============ EVOLUÇÃO TEMPORAL ============
+    
+    // Estudos dos últimos 7 dias
+    const estudosUltimos7Dias = await DB.prepare(`
+      SELECT data_estudo, COUNT(*) as total, SUM(tempo_minutos) as tempo_total
+      FROM estudos
+      WHERE usuario_id = ?
+      GROUP BY data_estudo
+      ORDER BY data_estudo DESC
+      LIMIT 7
+    `).bind(usuarioId).all()
+
+    // Evolução da acurácia (últimas 10 sessões)
+    const evolucaoAcuracia = await DB.prepare(`
+      SELECT data_estudo, AVG(acuracia) as media_acuracia
+      FROM estudos
+      WHERE acuracia > 0 AND usuario_id = ?
+      GROUP BY data_estudo
+      ORDER BY data_estudo DESC
+      LIMIT 10
+    `).bind(usuarioId).all()
+
+    // ============ METAS DE QUESTÕES (ENARE 2026) ============
+    
+    // Buscar data da prova do usuário
+    const usuario = await DB.prepare('SELECT data_prova FROM usuarios WHERE id = ?').bind(usuarioId).first()
+    const dataProva = usuario?.data_prova || '2026-09-30' // Default: setembro/2026
+    
+    // Calcular checkpoints trimestrais
+    const dataProvaDate = new Date(dataProva)
+    const dataInicio = new Date(hoje)
+    
+    // Metas trimestrais fixas até setembro/2026
+    const checkpoints = [
+      { trimestre: 'Março/2025', data: '2025-03-31', meta: 3000 },
+      { trimestre: 'Junho/2025', data: '2025-06-30', meta: 6000 },
+      { trimestre: 'Setembro/2025', data: '2025-09-30', meta: 9000 },
+      { trimestre: 'Dezembro/2025', data: '2025-12-31', meta: 12000 },
+      { trimestre: 'Setembro/2026', data: '2026-09-30', meta: 15000 }
+    ]
+    
+    // Encontrar próximo checkpoint
+    let proximoCheckpoint = null
+    let checkpointAtual = null
+    const dataHoje = new Date(hoje)
+    
+    for (let i = 0; i < checkpoints.length; i++) {
+      const checkDate = new Date(checkpoints[i].data)
+      if (dataHoje <= checkDate) {
+        proximoCheckpoint = checkpoints[i]
+        checkpointAtual = i > 0 ? checkpoints[i - 1] : null
+        break
+      }
+    }
+    
+    if (!proximoCheckpoint) {
+      proximoCheckpoint = checkpoints[checkpoints.length - 1]
+      checkpointAtual = checkpoints[checkpoints.length - 2]
+    }
+    
+    // Calcular progresso até próximo checkpoint
+    const questoesFeitas = totalQuestoes?.total || 0
+    const metaProximoCheckpoint = proximoCheckpoint.meta
+    const percentualMeta = (questoesFeitas / 15000) * 100
+    const percentualCheckpoint = (questoesFeitas / metaProximoCheckpoint) * 100
+    
+    // Calcular ritmo (questões por dia desde o início)
+    const diasEstudadosTotal = diasComEstudo?.dias || 1
+    const ritmoAtual = questoesFeitas / diasEstudadosTotal
+    
+    // Calcular dias até a prova
+    const diasAteProva = Math.floor((dataProvaDate.getTime() - dataHoje.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Calcular ritmo necessário
+    const questoesFaltam = 15000 - questoesFeitas
+    const ritmoNecessario = diasAteProva > 0 ? questoesFaltam / diasAteProva : 0
+    
+    // Projeção: se continuar no ritmo atual, quantas questões terá em set/2026?
+    const projecaoFinal = diasAteProva > 0 ? questoesFeitas + (ritmoAtual * diasAteProva) : questoesFeitas
+    
+    // Questões por mês (últimos 3 meses)
+    const questoesPorMes = await DB.prepare(`
+      SELECT 
+        strftime('%Y-%m', data_estudo) as mes,
+        SUM(questoes_feitas) as total
+      FROM estudos
+      WHERE usuario_id = ?
+      GROUP BY strftime('%Y-%m', data_estudo)
+      ORDER BY mes DESC
+      LIMIT 3
+    `).bind(usuarioId).all()
+    
+    // Calcular meta mensal (15000 questões / meses até prova)
+    const mesesAteProva = Math.ceil(diasAteProva / 30)
+    const metaMensal = mesesAteProva > 0 ? Math.ceil(questoesFaltam / mesesAteProva) : 0
 
     return c.json({
+      // Métricas básicas
       total_estudos: totalEstudos?.total || 0,
       total_questoes: totalQuestoes?.total || 0,
+      horas_totais: Math.round((horasTotais?.total || 0) / 60 * 10) / 10,
       acuracia_media: acuraciaMedia?.media || 0,
+      
+      // Streak e consistência
+      streak_dias: streak,
+      media_questoes_dia: Math.round(mediaDiaria * 10) / 10,
+      
+      // Revisões
+      revisoes_pendentes: revisoesPendentes?.total || 0,
+      revisoes_concluidas: revisoesConcluidas?.total || 0,
+      taxa_sucesso_revisoes: Math.round(taxaSucessoRevisoes * 10) / 10,
+      revisoes_atrasadas: revisoesAtrasadas?.total || 0,
+      
+      // Por área
       acuracia_por_area: acuraciaPorArea.results,
+      distribuicao_por_area: distribuicaoPorArea.results,
+      
+      // Por prevalência
+      performance_por_prevalencia: performancePorPrevalencia.results,
+      
+      // Rankings
       temas_mais_errados: temasMaisErrados.results,
-      revisoes_pendentes: revisoesPendentes?.total || 0
+      temas_dominados: temasDominados.results,
+      temas_mais_revisados: temasMaisRevisados.results,
+      
+      // Progresso do ciclo
+      total_semanas_ciclo: totalSemanas?.total || 0,
+      temas_totais_ciclo: temasTotaisCiclo?.total || 0,
+      temas_estudados: temasEstudados?.total || 0,
+      percentual_conclusao: Math.round(percentualConclusao * 10) / 10,
+      
+      // Evolução temporal
+      estudos_ultimos_7_dias: estudosUltimos7Dias.results.reverse(),
+      evolucao_acuracia: evolucaoAcuracia.results.reverse(),
+      
+      // Metas de questões (ENARE 2026)
+      meta_questoes: {
+        total_questoes: questoesFeitas,
+        meta_final: 15000,
+        percentual_meta: Math.round(percentualMeta * 10) / 10,
+        proximo_checkpoint: proximoCheckpoint,
+        checkpoint_atual: checkpointAtual,
+        percentual_checkpoint: Math.round(percentualCheckpoint * 10) / 10,
+        checkpoints: checkpoints,
+        ritmo_atual: Math.round(ritmoAtual * 10) / 10,
+        ritmo_necessario: Math.round(ritmoNecessario * 10) / 10,
+        dias_ate_prova: diasAteProva,
+        projecao_final: Math.round(projecaoFinal),
+        questoes_faltam: questoesFaltam,
+        meta_mensal: metaMensal,
+        questoes_por_mes: questoesPorMes.results.reverse(),
+        no_caminho_certo: projecaoFinal >= 15000
+      }
     })
 
   } catch (error: any) {
@@ -653,41 +967,85 @@ app.get('/', async (c) => {
             .dark .border-gray-200 {
                 border-color: #2d3748 !important;
             }
+            
+            /* Animação de brilho no header */
+            @keyframes shimmer {
+                0% {
+                    transform: translateX(-100%);
+                }
+                100% {
+                    transform: translateX(100%);
+                }
+            }
+            .animate-shimmer {
+                animation: shimmer 3s infinite;
+            }
+            
+            /* Efeito glassmorphism aprimorado */
+            .backdrop-blur-sm {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+            }
         </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
         <!-- Header -->
-        <header class="bg-white shadow-lg border-b-4 border-indigo-600">
-            <div class="max-w-7xl mx-auto px-4 py-6">
+        <header class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-2xl relative overflow-hidden">
+            <!-- Efeito de brilho animado -->
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer"></div>
+            
+            <div class="max-w-7xl mx-auto px-4 py-8 relative z-10">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
-                        <div class="bg-indigo-600 p-3 rounded-xl">
-                            <i class="fas fa-brain text-white text-3xl"></i>
+                    <!-- Logo e Título -->
+                    <div class="flex items-center space-x-5">
+                        <div class="bg-white bg-opacity-20 backdrop-blur-sm p-4 rounded-2xl shadow-xl transform hover:scale-110 transition-all duration-300">
+                            <i class="fas fa-brain text-white text-4xl"></i>
                         </div>
                         <div>
-                            <h1 class="text-3xl font-bold text-gray-800">Cérebro de Estudos HardMed</h1>
-                            <p class="text-gray-600">Sistema Inteligente de Revisões ENARE</p>
+                            <h1 class="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
+                                Cérebro de Estudos HardMed
+                            </h1>
+                            <p class="text-indigo-100 text-lg font-medium mt-1 drop-shadow">
+                                <i class="fas fa-graduation-cap mr-2"></i>Sistema Inteligente de Revisões ENARE
+                            </p>
                         </div>
                     </div>
+                    
+                    <!-- Ações do Header -->
                     <div class="flex items-center space-x-6">
-                        <div class="text-right">
-                            <p class="text-sm text-gray-600">Semana Atual</p>
-                            <p class="text-2xl font-bold text-indigo-600" id="semana-atual">--</p>
+                        <!-- Semana Atual -->
+                        <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl px-6 py-3 shadow-xl border border-white border-opacity-30">
+                            <p class="text-indigo-100 text-sm font-semibold mb-1">Semana Atual</p>
+                            <p class="text-3xl font-bold text-white" id="semana-atual">--</p>
                         </div>
-                        <div class="flex items-center space-x-3">
-                            <button onclick="toggleTheme()" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg transition" title="Alternar tema">
-                                <i id="theme-icon" class="fas fa-moon text-gray-700"></i>
+                        
+                        <!-- Controles -->
+                        <div class="flex items-center space-x-4">
+                            <!-- Botão de Tema -->
+                            <button onclick="toggleTheme()" 
+                                    class="bg-white bg-opacity-20 backdrop-blur-sm hover:bg-opacity-30 px-5 py-3 rounded-xl transition-all duration-300 shadow-lg border border-white border-opacity-30 transform hover:scale-105" 
+                                    title="Alternar tema">
+                                <i id="theme-icon" class="fas fa-moon text-white text-xl"></i>
                             </button>
-                            <div class="text-right">
-                                <p class="text-sm text-gray-600">Olá, ${nomeUsuario}!</p>
-                                <button onclick="logout()" class="text-sm text-red-600 hover:text-red-700 font-semibold">
-                                    <i class="fas fa-sign-out-alt mr-1"></i>Sair
+                            
+                            <!-- Info do Usuário -->
+                            <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl px-6 py-3 shadow-xl border border-white border-opacity-30">
+                                <p class="text-indigo-100 text-sm font-semibold mb-1">
+                                    <i class="fas fa-user-circle mr-2"></i>Olá, ${nomeUsuario}!
+                                </p>
+                                <button onclick="logout()" 
+                                        class="text-sm text-white hover:text-red-200 font-bold transition-colors duration-200 flex items-center group">
+                                    <i class="fas fa-sign-out-alt mr-2 group-hover:scale-110 transition-transform"></i>
+                                    Sair
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            
+            <!-- Linha decorativa inferior -->
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300"></div>
         </header>
 
         <!-- Main Content -->
@@ -805,15 +1163,206 @@ app.get('/', async (c) => {
 
             <!-- Tab: Métricas -->
             <div id="tab-metricas" class="tab-content hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Cards de Métricas Principais -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
+                        <div class="flex items-center justify-between mb-2">
+                            <i class="fas fa-fire text-3xl opacity-80"></i>
+                            <span id="metric-streak" class="text-3xl font-bold">--</span>
+                        </div>
+                        <p class="text-sm opacity-90">Dias Consecutivos</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-4 text-white">
+                        <div class="flex items-center justify-between mb-2">
+                            <i class="fas fa-clock text-3xl opacity-80"></i>
+                            <span id="metric-horas" class="text-3xl font-bold">--</span>
+                        </div>
+                        <p class="text-sm opacity-90">Horas de Estudo</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-4 text-white">
+                        <div class="flex items-center justify-between mb-2">
+                            <i class="fas fa-check-double text-3xl opacity-80"></i>
+                            <span id="metric-revisoes-sucesso" class="text-3xl font-bold">--</span>
+                        </div>
+                        <p class="text-sm opacity-90">Taxa Sucesso Revisões</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-4 text-white">
+                        <div class="flex items-center justify-between mb-2">
+                            <i class="fas fa-trophy text-3xl opacity-80"></i>
+                            <span id="metric-conclusao" class="text-3xl font-bold">--</span>
+                        </div>
+                        <p class="text-sm opacity-90">Conclusão do Ciclo</p>
+                    </div>
+                </div>
+
+                <!-- META DE QUESTÕES ENARE 2026 -->
+                <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-2xl p-8 mb-6 text-white">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-3xl font-bold mb-2">
+                                <i class="fas fa-bullseye mr-3"></i>Meta ENARE 2026
+                            </h2>
+                            <p class="text-indigo-100">15.000 questões até setembro de 2026</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-5xl font-bold" id="meta-questoes-total">--</p>
+                            <p class="text-indigo-100">questões feitas</p>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Progresso -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-semibold">Progresso Total</span>
+                            <span class="font-bold text-2xl" id="meta-percentual">--%</span>
+                        </div>
+                        <div class="w-full bg-white bg-opacity-20 rounded-full h-6 overflow-hidden">
+                            <div id="meta-barra" class="bg-white h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                        <div class="flex items-center justify-between mt-2 text-sm text-indigo-100">
+                            <span>0</span>
+                            <span>15.000</span>
+                        </div>
+                    </div>
+
+                    <!-- Checkpoints e Status -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                            <p class="text-sm text-indigo-100 mb-1">Próximo Checkpoint</p>
+                            <p class="text-2xl font-bold" id="meta-proximo-checkpoint">--</p>
+                            <p class="text-sm text-indigo-100 mt-1" id="meta-checkpoint-progresso">--%</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                            <p class="text-sm text-indigo-100 mb-1">Ritmo Atual</p>
+                            <p class="text-2xl font-bold" id="meta-ritmo-atual">--</p>
+                            <p class="text-sm text-indigo-100 mt-1">questões/dia</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                            <p class="text-sm text-indigo-100 mb-1">Ritmo Necessário</p>
+                            <p class="text-2xl font-bold" id="meta-ritmo-necessario">--</p>
+                            <p class="text-sm text-indigo-100 mt-1">questões/dia</p>
+                        </div>
+                    </div>
+
+                    <!-- Status e Projeção -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-sm text-indigo-100 mb-2">Status Atual</p>
+                                    <p class="text-lg font-semibold" id="meta-status">--</p>
+                                </div>
+                                <i id="meta-status-icon" class="fas fa-chart-line text-3xl opacity-70"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-sm text-indigo-100 mb-2">Projeção para Set/2026</p>
+                                    <p class="text-lg font-semibold" id="meta-projecao">--</p>
+                                </div>
+                                <i id="meta-projecao-icon" class="fas fa-rocket text-3xl opacity-70"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Checkpoints -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-flag-checkered mr-2 text-indigo-600"></i>Checkpoints Trimestrais
+                    </h2>
+                    <canvas id="chartCheckpoints"></canvas>
+                    <div class="mt-4 text-sm text-gray-600">
+                        <p><i class="fas fa-info-circle mr-2"></i><strong>Lembre-se:</strong> Essas metas servem para ter senso de progresso, não de culpa. A constância vence o volume isolado.</p>
+                    </div>
+                </div>
+
+                <!-- Gráficos -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Acurácia por Área</h2>
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-chart-line mr-2 text-indigo-600"></i>Evolução da Acurácia
+                        </h2>
+                        <canvas id="chartEvolucao"></canvas>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-chart-bar mr-2 text-indigo-600"></i>Acurácia por Área
+                        </h2>
                         <canvas id="chartAcuracia"></canvas>
                     </div>
                     <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Temas Mais Errados</h2>
-                        <div id="temas-errados" class="space-y-2">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-chart-pie mr-2 text-indigo-600"></i>Distribuição por Área
+                        </h2>
+                        <canvas id="chartDistribuicao"></canvas>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-calendar-week mr-2 text-indigo-600"></i>Estudos Últimos 7 Dias
+                        </h2>
+                        <canvas id="chartEstudos7Dias"></canvas>
+                    </div>
+                </div>
+
+                <!-- Rankings e Listas -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-star mr-2 text-yellow-500"></i>Temas Dominados (>90%)
+                        </h2>
+                        <div id="temas-dominados" class="space-y-2 max-h-96 overflow-y-auto">
                             <p class="text-gray-600">Carregando...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>Temas Mais Errados (<70%)
+                        </h2>
+                        <div id="temas-errados" class="space-y-2 max-h-96 overflow-y-auto">
+                            <p class="text-gray-600">Carregando...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">
+                            <i class="fas fa-redo mr-2 text-purple-500"></i>Temas Mais Revisados
+                        </h2>
+                        <div id="temas-revisados" class="space-y-2 max-h-96 overflow-y-auto">
+                            <p class="text-gray-600">Carregando...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance por Prevalência -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-chart-area mr-2 text-indigo-600"></i>Performance por Prevalência
+                    </h2>
+                    <canvas id="chartPrevalencia"></canvas>
+                </div>
+
+                <!-- Resumo do Progresso -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-tasks mr-2 text-indigo-600"></i>Resumo do Progresso
+                    </h2>
+                    <div id="resumo-progresso" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="text-center p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-bold text-indigo-600" id="resumo-semanas">--/--</p>
+                            <p class="text-sm text-gray-600 mt-1">Semanas Completas</p>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-bold text-green-600" id="resumo-temas">--/--</p>
+                            <p class="text-sm text-gray-600 mt-1">Temas Estudados</p>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-bold text-orange-600" id="resumo-media-dia">--</p>
+                            <p class="text-sm text-gray-600 mt-1">Questões/Dia Média</p>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-bold text-red-600" id="resumo-atrasadas">--</p>
+                            <p class="text-sm text-gray-600 mt-1">Revisões Atrasadas</p>
                         </div>
                     </div>
                 </div>
@@ -965,7 +1514,12 @@ app.get('/', async (c) => {
         // FRONTEND JAVASCRIPT
         // ====================================================
         
+        // Variáveis globais para gráficos
         let chartAcuracia = null;
+        let chartEvolucao = null;
+        let chartDistribuicao = null;
+        let chartEstudos7Dias = null;
+        let chartPrevalencia = null;
 
         // Theme Manager
         function toggleTheme() {
@@ -988,6 +1542,26 @@ app.get('/', async (c) => {
         if (savedTheme === 'dark') {
             document.getElementById('html-root').classList.add('dark')
             document.getElementById('theme-icon').className = 'fas fa-sun text-yellow-400'
+        }
+
+        // Helper: Formatar data do formato ISO para DD/MM/YYYY (Brasil)
+        function formatarDataBR(dataISO) {
+          if (!dataISO) return '--'
+          // Adiciona timezone do Brasil para evitar conversão incorreta
+          const data = new Date(dataISO + 'T00:00:00-03:00')
+          const dia = String(data.getDate()).padStart(2, '0')
+          const mes = String(data.getMonth() + 1).padStart(2, '0')
+          const ano = data.getFullYear()
+          return \`\${dia}/\${mes}/\${ano}\`
+        }
+
+        // Helper: Obter data de hoje no Brasil (UTC-3)
+        function getDataHojeBrasil() {
+          const agora = new Date()
+          // Converter para horário do Brasil
+          const brasilTime = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+          brasilTime.setHours(0, 0, 0, 0)
+          return brasilTime
         }
 
         // Logout
@@ -1060,12 +1634,11 @@ app.get('/', async (c) => {
             
             const revisoesDiv = document.getElementById('revisoes-do-dia')
             if (revisoesData.revisoes && revisoesData.revisoes.length > 0) {
-              const hoje = new Date()
-              hoje.setHours(0, 0, 0, 0)
+              const hoje = getDataHojeBrasil()
               
               revisoesDiv.innerHTML = revisoesData.revisoes.slice(0, 5).map(r => {
-                const dataAgendada = new Date(r.data_agendada)
-                const dataFormatada = dataAgendada.toLocaleDateString('pt-BR')
+                const dataAgendada = new Date(r.data_agendada + 'T00:00:00-03:00')
+                const dataFormatada = formatarDataBR(r.data_agendada)
                 const podeRevisar = dataAgendada <= hoje
                 
                 return \`
@@ -1135,6 +1708,7 @@ app.get('/', async (c) => {
                   if (data.success) {
                     await Modal.alert('Sucesso!', 'Estudo registrado! Acurácia: ' + data.acuracia.toFixed(1) + '%', 'success')
                     loadDashboard()
+                    loadSemanas() // Atualizar mapa de semanas
                   } else {
                     await Modal.alert('Erro', data.error, 'error')
                   }
@@ -1233,6 +1807,7 @@ app.get('/', async (c) => {
                   
                   await Modal.alert('Sucesso!', msg, 'success')
                   loadDashboard()
+                  loadRevisoes() // Atualizar lista de revisões
                 } else {
                   await Modal.alert('Erro', data.error, 'error')
                 }
@@ -1310,6 +1885,7 @@ app.get('/', async (c) => {
                 
                 await Modal.alert('Sucesso!', msgs[dificuldade], 'success')
                 loadDashboard()
+                loadRevisoes() // Atualizar lista de revisões
               } else {
                 await Modal.alert('Erro', data.error, 'error')
               }
@@ -1342,7 +1918,8 @@ app.get('/', async (c) => {
                 
                 if (data.success) {
                   await Modal.alert('Sucesso!', 'Ciclo gerado com sucesso! ' + data.semanas + ' semanas criadas.', 'success')
-                  loadSemanas()
+                  loadDashboard() // Atualizar guia do dia
+                  loadSemanas() // Atualizar mapa de semanas
                 } else {
                   await Modal.alert('Erro', data.error, 'error')
                 }
@@ -1432,20 +2009,33 @@ app.get('/', async (c) => {
             
             const listaDiv = document.getElementById('lista-revisoes')
             if (data.revisoes && data.revisoes.length > 0) {
-              listaDiv.innerHTML = data.revisoes.map(r => \`
-                <div class="border border-gray-200 rounded-lg p-4">
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                      <h3 class="font-bold text-gray-800">\${r.tema}</h3>
-                      <p class="text-sm text-gray-600">\${r.area} · \${r.prevalencia} · Revisão #\${r.numero_revisao}</p>
-                      <p class="text-xs text-gray-500 mt-1">Agendada: \${r.data_agendada}</p>
+              const hoje = getDataHojeBrasil()
+              
+              listaDiv.innerHTML = data.revisoes.map(r => {
+                const dataAgendada = new Date(r.data_agendada + 'T00:00:00-03:00')
+                const podeRevisar = dataAgendada <= hoje
+                
+                return \`
+                  <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <h3 class="font-bold text-gray-800">\${r.tema}</h3>
+                        <p class="text-sm text-gray-600">\${r.area} · \${r.prevalencia} · Revisão #\${r.numero_revisao}</p>
+                        <p class="text-xs text-gray-500 mt-1">Agendada: \${formatarDataBR(r.data_agendada)}</p>
+                      </div>
+                      \${podeRevisar ? \`
+                        <button onclick="concluirRevisao(\${r.id}, \${r.tema_id}, '\${r.tema}', \${r.prevalencia_numero})" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm">
+                          <i class="fas fa-check mr-1"></i>Concluir
+                        </button>
+                      \` : \`
+                        <button disabled class="bg-gray-400 text-white px-4 py-2 rounded-lg text-sm cursor-not-allowed opacity-60">
+                          <i class="fas fa-clock mr-1"></i>Aguardar data
+                        </button>
+                      \`}
                     </div>
-                    <button onclick="concluirRevisao(\${r.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm">
-                      <i class="fas fa-check mr-1"></i>Concluir
-                    </button>
                   </div>
-                </div>
-              \`).join('')
+                \`
+              }).join('')
             } else {
               listaDiv.innerHTML = '<p class="text-gray-600">Nenhuma revisão pendente 🎉</p>'
             }
@@ -1460,19 +2050,55 @@ app.get('/', async (c) => {
             const res = await fetch('/api/metricas')
             const data = await res.json()
 
-            // Gráfico de acurácia por área
-            const ctx = document.getElementById('chartAcuracia')
+            // ====== CARDS DE MÉTRICAS ======
+            document.getElementById('metric-streak').textContent = data.streak_dias || 0
+            document.getElementById('metric-horas').textContent = data.horas_totais || 0
+            document.getElementById('metric-revisoes-sucesso').textContent = (data.taxa_sucesso_revisoes || 0).toFixed(1) + '%'
+            document.getElementById('metric-conclusao').textContent = (data.percentual_conclusao || 0).toFixed(1) + '%'
+
+            // ====== GRÁFICO: EVOLUÇÃO DA ACURÁCIA ======
+            const ctxEvolucao = document.getElementById('chartEvolucao')
+            if (chartEvolucao) chartEvolucao.destroy()
+
+            if (data.evolucao_acuracia && data.evolucao_acuracia.length > 0) {
+              chartEvolucao = new Chart(ctxEvolucao, {
+                type: 'line',
+                data: {
+                  labels: data.evolucao_acuracia.map(e => {
+                    const d = new Date(e.data_estudo)
+                    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                  }),
+                  datasets: [{
+                    label: 'Acurácia Média (%)',
+                    data: data.evolucao_acuracia.map(e => e.media_acuracia),
+                    borderColor: 'rgb(99, 102, 241)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  scales: {
+                    y: { beginAtZero: true, max: 100 }
+                  }
+                }
+              })
+            }
+
+            // ====== GRÁFICO: ACURÁCIA POR ÁREA ======
+            const ctxAcuracia = document.getElementById('chartAcuracia')
             if (chartAcuracia) chartAcuracia.destroy()
 
             if (data.acuracia_por_area && data.acuracia_por_area.length > 0) {
-              chartAcuracia = new Chart(ctx, {
+              chartAcuracia = new Chart(ctxAcuracia, {
                 type: 'bar',
                 data: {
                   labels: data.acuracia_por_area.map(a => a.area),
                   datasets: [{
                     label: 'Acurácia Média (%)',
                     data: data.acuracia_por_area.map(a => a.media_acuracia),
-                    backgroundColor: 'rgba(99, 102, 241, 0.5)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.7)',
                     borderColor: 'rgba(99, 102, 241, 1)',
                     borderWidth: 2
                   }]
@@ -1486,17 +2112,246 @@ app.get('/', async (c) => {
               })
             }
 
-            // Temas mais errados
-            const temasDiv = document.getElementById('temas-errados')
-            if (data.temas_mais_errados && data.temas_mais_errados.length > 0) {
-              temasDiv.innerHTML = data.temas_mais_errados.map(t => \`
-                <div class="border border-red-200 rounded-lg p-3 bg-red-50">
+            // ====== GRÁFICO: DISTRIBUIÇÃO POR ÁREA (PIZZA) ======
+            const ctxDistribuicao = document.getElementById('chartDistribuicao')
+            if (chartDistribuicao) chartDistribuicao.destroy()
+
+            if (data.distribuicao_por_area && data.distribuicao_por_area.length > 0) {
+              chartDistribuicao = new Chart(ctxDistribuicao, {
+                type: 'pie',
+                data: {
+                  labels: data.distribuicao_por_area.map(a => a.area),
+                  datasets: [{
+                    data: data.distribuicao_por_area.map(a => a.total),
+                    backgroundColor: [
+                      'rgba(99, 102, 241, 0.7)',
+                      'rgba(147, 51, 234, 0.7)',
+                      'rgba(236, 72, 153, 0.7)',
+                      'rgba(251, 146, 60, 0.7)',
+                      'rgba(34, 197, 94, 0.7)',
+                      'rgba(59, 130, 246, 0.7)'
+                    ]
+                  }]
+                },
+                options: {
+                  responsive: true
+                }
+              })
+            }
+
+            // ====== GRÁFICO: ESTUDOS ÚLTIMOS 7 DIAS ======
+            const ctxEstudos = document.getElementById('chartEstudos7Dias')
+            if (chartEstudos7Dias) chartEstudos7Dias.destroy()
+
+            if (data.estudos_ultimos_7_dias && data.estudos_ultimos_7_dias.length > 0) {
+              chartEstudos7Dias = new Chart(ctxEstudos, {
+                type: 'bar',
+                data: {
+                  labels: data.estudos_ultimos_7_dias.map(e => {
+                    const d = new Date(e.data_estudo)
+                    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                  }),
+                  datasets: [{
+                    label: 'Estudos',
+                    data: data.estudos_ultimos_7_dias.map(e => e.total),
+                    backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  scales: {
+                    y: { beginAtZero: true }
+                  }
+                }
+              })
+            }
+
+            // ====== GRÁFICO: PERFORMANCE POR PREVALÊNCIA ======
+            const ctxPrevalencia = document.getElementById('chartPrevalencia')
+            if (chartPrevalencia) chartPrevalencia.destroy()
+
+            if (data.performance_por_prevalencia && data.performance_por_prevalencia.length > 0) {
+              chartPrevalencia = new Chart(ctxPrevalencia, {
+                type: 'bar',
+                data: {
+                  labels: data.performance_por_prevalencia.map(p => p.prevalencia),
+                  datasets: [{
+                    label: 'Acurácia Média (%)',
+                    data: data.performance_por_prevalencia.map(p => p.media_acuracia),
+                    backgroundColor: 'rgba(251, 146, 60, 0.7)',
+                    borderColor: 'rgba(251, 146, 60, 1)',
+                    borderWidth: 2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  scales: {
+                    y: { beginAtZero: true, max: 100 }
+                  }
+                }
+              })
+            }
+
+            // ====== TEMAS DOMINADOS ======
+            const dominadosDiv = document.getElementById('temas-dominados')
+            if (data.temas_dominados && data.temas_dominados.length > 0) {
+              dominadosDiv.innerHTML = data.temas_dominados.map(t => \`
+                <div class="border border-green-200 rounded-lg p-3 bg-green-50">
                   <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
-                  <p class="text-sm text-gray-600">\${t.area} · <span class="text-red-600 font-bold">\${t.media_acuracia.toFixed(1)}%</span></p>
+                  <p class="text-sm text-gray-600">\${t.area} · <span class="text-green-600 font-bold">\${t.media_acuracia.toFixed(1)}%</span></p>
+                  <p class="text-xs text-gray-500">Estudado \${t.vezes_estudado}x</p>
                 </div>
               \`).join('')
             } else {
-              temasDiv.innerHTML = '<p class="text-gray-600">Nenhum tema com <70% de acurácia 🎉</p>'
+              dominadosDiv.innerHTML = '<p class="text-gray-600">Nenhum tema dominado ainda. Continue estudando! 💪</p>'
+            }
+
+            // ====== TEMAS MAIS ERRADOS ======
+            const erradosDiv = document.getElementById('temas-errados')
+            if (data.temas_mais_errados && data.temas_mais_errados.length > 0) {
+              erradosDiv.innerHTML = data.temas_mais_errados.map(t => \`
+                <div class="border border-red-200 rounded-lg p-3 bg-red-50">
+                  <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
+                  <p class="text-sm text-gray-600">\${t.area} · <span class="text-red-600 font-bold">\${t.media_acuracia.toFixed(1)}%</span></p>
+                  <p class="text-xs text-gray-500">Estudado \${t.vezes_estudado}x</p>
+                </div>
+              \`).join('')
+            } else {
+              erradosDiv.innerHTML = '<p class="text-gray-600">Nenhum tema com <70% de acurácia 🎉</p>'
+            }
+
+            // ====== TEMAS MAIS REVISADOS ======
+            const revisadosDiv = document.getElementById('temas-revisados')
+            if (data.temas_mais_revisados && data.temas_mais_revisados.length > 0) {
+              revisadosDiv.innerHTML = data.temas_mais_revisados.map(t => \`
+                <div class="border border-purple-200 rounded-lg p-3 bg-purple-50">
+                  <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
+                  <p class="text-sm text-gray-600">\${t.area}</p>
+                  <p class="text-xs text-purple-600 font-bold">\${t.total_revisoes} revisões</p>
+                </div>
+              \`).join('')
+            } else {
+              revisadosDiv.innerHTML = '<p class="text-gray-600">Nenhuma revisão realizada ainda.</p>'
+            }
+
+            // ====== RESUMO DO PROGRESSO ======
+            document.getElementById('resumo-semanas').textContent = \`--/\${data.total_semanas_ciclo || 40}\`
+            document.getElementById('resumo-temas').textContent = \`\${data.temas_estudados || 0}/\${data.temas_totais_ciclo || 0}\`
+            document.getElementById('resumo-media-dia').textContent = (data.media_questoes_dia || 0).toFixed(1)
+            document.getElementById('resumo-atrasadas').textContent = data.revisoes_atrasadas || 0
+
+            // ====== META DE QUESTÕES ENARE 2026 ======
+            if (data.meta_questoes) {
+              const meta = data.meta_questoes
+              
+              // Números principais
+              document.getElementById('meta-questoes-total').textContent = meta.total_questoes.toLocaleString('pt-BR')
+              document.getElementById('meta-percentual').textContent = meta.percentual_meta.toFixed(1) + '%'
+              document.getElementById('meta-barra').style.width = Math.min(meta.percentual_meta, 100) + '%'
+              
+              // Próximo checkpoint
+              if (meta.proximo_checkpoint) {
+                document.getElementById('meta-proximo-checkpoint').textContent = meta.proximo_checkpoint.trimestre
+                document.getElementById('meta-checkpoint-progresso').textContent = meta.percentual_checkpoint.toFixed(1) + '% do checkpoint'
+              }
+              
+              // Ritmos
+              document.getElementById('meta-ritmo-atual').textContent = meta.ritmo_atual.toFixed(1)
+              document.getElementById('meta-ritmo-necessario').textContent = meta.ritmo_necessario.toFixed(1)
+              
+              // Status e projeção
+              const statusTexto = meta.no_caminho_certo 
+                ? \`✅ No caminho certo! Faltam \${meta.questoes_faltam.toLocaleString('pt-BR')} questões\`
+                : \`⚠️ Precisa acelerar! Faltam \${meta.questoes_faltam.toLocaleString('pt-BR')} questões\`
+              
+              document.getElementById('meta-status').textContent = statusTexto
+              document.getElementById('meta-status-icon').className = meta.no_caminho_certo 
+                ? 'fas fa-check-circle text-3xl opacity-70' 
+                : 'fas fa-exclamation-triangle text-3xl opacity-70'
+              
+              document.getElementById('meta-projecao').textContent = \`\${meta.projecao_final.toLocaleString('pt-BR')} questões\`
+              document.getElementById('meta-projecao-icon').className = meta.no_caminho_certo
+                ? 'fas fa-rocket text-3xl opacity-70'
+                : 'fas fa-hourglass-half text-3xl opacity-70'
+              
+              // Gráfico de checkpoints
+              const ctxCheckpoints = document.getElementById('chartCheckpoints')
+              if (chartCheckpoints) {
+                new Chart(ctxCheckpoints, {
+                  type: 'line',
+                  data: {
+                    labels: meta.checkpoints.map(c => c.trimestre),
+                    datasets: [
+                      {
+                        label: 'Meta',
+                        data: meta.checkpoints.map(c => c.meta),
+                        borderColor: 'rgba(99, 102, 241, 1)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: false
+                      },
+                      {
+                        label: 'Seu Progresso',
+                        data: meta.checkpoints.map(c => {
+                          const checkDate = new Date(c.data)
+                          const hoje = new Date()
+                          return hoje > checkDate ? meta.total_questoes : null
+                        }),
+                        borderColor: 'rgba(34, 197, 94, 1)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        borderWidth: 3,
+                        tension: 0,
+                        fill: false,
+                        spanGaps: false
+                      },
+                      {
+                        label: 'Projeção',
+                        data: meta.checkpoints.map((c, i) => {
+                          if (i === meta.checkpoints.length - 1) {
+                            return meta.projecao_final
+                          }
+                          return null
+                        }),
+                        borderColor: 'rgba(251, 146, 60, 1)',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0,
+                        fill: false,
+                        spanGaps: true,
+                        pointRadius: 8,
+                        pointStyle: 'star'
+                      }
+                    ]
+                  },
+                  options: {
+                    responsive: true,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        max: 16000,
+                        ticks: {
+                          callback: function(value) {
+                            return value.toLocaleString('pt-BR')
+                          }
+                        }
+                      }
+                    },
+                    plugins: {
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            return context.dataset.label + ': ' + (context.parsed.y || 0).toLocaleString('pt-BR') + ' questões'
+                          }
+                        }
+                      }
+                    }
+                  }
+                })
+              }
             }
 
           } catch (error) {
