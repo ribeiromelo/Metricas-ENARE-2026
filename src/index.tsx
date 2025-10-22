@@ -3647,6 +3647,145 @@ app.get('/admin', async (c) => {
             </div>
         </div>
 
+        <!-- Modal: Adicionar Tema -->
+        <div id="modal-add-tema" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                    <h3 class="text-2xl font-bold flex items-center">
+                        <i class="fas fa-plus-circle mr-3"></i>Adicionar Novo Tema
+                    </h3>
+                    <button onclick="closeAddTemaModal()" class="text-white hover:text-gray-200 text-2xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="form-add-tema" class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Tema *</label>
+                        <input type="text" id="add-tema" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: Hemorragia Digestiva Alta">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Área *</label>
+                            <select id="add-area" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                                <option value="">Selecione...</option>
+                                <option value="Clínica Médica">Clínica Médica</option>
+                                <option value="Cirurgia">Cirurgia</option>
+                                <option value="Ginecologia e Obstetrícia">Ginecologia e Obstetrícia</option>
+                                <option value="Pediatria">Pediatria</option>
+                                <option value="Medicina Preventiva">Medicina Preventiva</option>
+                                <option value="Saúde da Família">Saúde da Família</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Subárea *</label>
+                            <input type="text" id="add-subarea" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: Gastroenterologia">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Subtópicos</label>
+                        <textarea id="add-subtopicos" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Separados por vírgula ou enter"></textarea>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prevalência *</label>
+                            <select id="add-prevalencia" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                                <option value="">Selecione...</option>
+                                <option value="Muito Alta">Muito Alta</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Média">Média</option>
+                                <option value="Baixa">Baixa</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prev. Número *</label>
+                            <input type="number" id="add-prevalencia-numero" required min="1" max="5" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="1-5">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prioridade</label>
+                            <input type="text" id="add-prioridade" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: P1">
+                        </div>
+                    </div>
+                    <div class="flex space-x-4 pt-4">
+                        <button type="submit" class="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-lg font-bold hover:from-green-700 hover:to-blue-700 transition">
+                            <i class="fas fa-save mr-2"></i>Salvar Tema
+                        </button>
+                        <button type="button" onclick="closeAddTemaModal()" class="px-6 bg-gray-300 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-400 transition">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Editar Tema -->
+        <div id="modal-edit-tema" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                    <h3 class="text-2xl font-bold flex items-center">
+                        <i class="fas fa-edit mr-3"></i>Editar Tema
+                    </h3>
+                    <button onclick="closeEditTemaModal()" class="text-white hover:text-gray-200 text-2xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="form-edit-tema" class="p-6 space-y-4">
+                    <input type="hidden" id="edit-id">
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Tema *</label>
+                        <input type="text" id="edit-tema" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Área *</label>
+                            <select id="edit-area" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                                <option value="Clínica Médica">Clínica Médica</option>
+                                <option value="Cirurgia">Cirurgia</option>
+                                <option value="Ginecologia e Obstetrícia">Ginecologia e Obstetrícia</option>
+                                <option value="Pediatria">Pediatria</option>
+                                <option value="Medicina Preventiva">Medicina Preventiva</option>
+                                <option value="Saúde da Família">Saúde da Família</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Subárea *</label>
+                            <input type="text" id="edit-subarea" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Subtópicos</label>
+                        <textarea id="edit-subtopicos" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prevalência *</label>
+                            <select id="edit-prevalencia" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                                <option value="Muito Alta">Muito Alta</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Média">Média</option>
+                                <option value="Baixa">Baixa</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prev. Número *</label>
+                            <input type="number" id="edit-prevalencia-numero" required min="1" max="5" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-2">Prioridade</label>
+                            <input type="text" id="edit-prioridade" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        </div>
+                    </div>
+                    <div class="flex space-x-4 pt-4">
+                        <button type="submit" class="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 rounded-lg font-bold hover:from-yellow-600 hover:to-orange-600 transition">
+                            <i class="fas fa-save mr-2"></i>Atualizar Tema
+                        </button>
+                        <button type="button" onclick="closeEditTemaModal()" class="px-6 bg-gray-300 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-400 transition">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <script>
             // Tabs
             function showAdminTab(tabName) {
@@ -3788,15 +3927,112 @@ app.get('/admin', async (c) => {
                 alert(\`Usuário: \${data.usuario.nome}\\nEmail: \${data.usuario.email}\\nTotal Estudos: \${data.total_estudos}\\nTotal Questões: \${data.total_questoes}\`)
             }
 
-            // Adicionar Tema (placeholder)
+            // Adicionar Tema
             function showAddTemaModal() {
-                alert('Função em desenvolvimento: Adicionar novo tema')
+                document.getElementById('modal-add-tema').classList.remove('hidden')
             }
 
-            // Editar Tema (placeholder)
-            function editTema(id) {
-                alert('Função em desenvolvimento: Editar tema ' + id)
+            function closeAddTemaModal() {
+                document.getElementById('modal-add-tema').classList.add('hidden')
+                document.getElementById('form-add-tema').reset()
             }
+
+            document.getElementById('form-add-tema').addEventListener('submit', async (e) => {
+                e.preventDefault()
+                
+                const tema = {
+                    tema: document.getElementById('add-tema').value,
+                    area: document.getElementById('add-area').value,
+                    subarea: document.getElementById('add-subarea').value,
+                    subtopicos: document.getElementById('add-subtopicos').value,
+                    prevalencia: document.getElementById('add-prevalencia').value,
+                    prevalencia_numero: parseInt(document.getElementById('add-prevalencia-numero').value),
+                    prioridade: document.getElementById('add-prioridade').value
+                }
+
+                try {
+                    const res = await fetch('/api/admin/temas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(tema)
+                    })
+                    const data = await res.json()
+
+                    if (data.success) {
+                        alert('✅ Tema adicionado com sucesso!')
+                        closeAddTemaModal()
+                        loadAdminTemas()
+                        // Atualizar contador
+                        loadAdminOverview()
+                    } else {
+                        alert('❌ Erro: ' + data.error)
+                    }
+                } catch (error) {
+                    alert('❌ Erro ao conectar com servidor')
+                }
+            })
+
+            // Editar Tema
+            async function editTema(id) {
+                try {
+                    const res = await fetch(\`/api/admin/temas/\${id}\`)
+                    const data = await res.json()
+                    
+                    if (data.tema) {
+                        const t = data.tema
+                        document.getElementById('edit-id').value = t.id
+                        document.getElementById('edit-tema').value = t.tema
+                        document.getElementById('edit-area').value = t.area
+                        document.getElementById('edit-subarea').value = t.subarea
+                        document.getElementById('edit-subtopicos').value = t.subtopicos || ''
+                        document.getElementById('edit-prevalencia').value = t.prevalencia
+                        document.getElementById('edit-prevalencia-numero').value = t.prevalencia_numero
+                        document.getElementById('edit-prioridade').value = t.prioridade || ''
+                        
+                        document.getElementById('modal-edit-tema').classList.remove('hidden')
+                    }
+                } catch (error) {
+                    alert('❌ Erro ao carregar tema')
+                }
+            }
+
+            function closeEditTemaModal() {
+                document.getElementById('modal-edit-tema').classList.add('hidden')
+            }
+
+            document.getElementById('form-edit-tema').addEventListener('submit', async (e) => {
+                e.preventDefault()
+                
+                const id = document.getElementById('edit-id').value
+                const tema = {
+                    tema: document.getElementById('edit-tema').value,
+                    area: document.getElementById('edit-area').value,
+                    subarea: document.getElementById('edit-subarea').value,
+                    subtopicos: document.getElementById('edit-subtopicos').value,
+                    prevalencia: document.getElementById('edit-prevalencia').value,
+                    prevalencia_numero: parseInt(document.getElementById('edit-prevalencia-numero').value),
+                    prioridade: document.getElementById('edit-prioridade').value
+                }
+
+                try {
+                    const res = await fetch(\`/api/admin/temas/\${id}\`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(tema)
+                    })
+                    const data = await res.json()
+
+                    if (data.success) {
+                        alert('✅ Tema atualizado com sucesso!')
+                        closeEditTemaModal()
+                        loadAdminTemas()
+                    } else {
+                        alert('❌ Erro: ' + data.error)
+                    }
+                } catch (error) {
+                    alert('❌ Erro ao conectar com servidor')
+                }
+            })
 
             // Deletar Tema
             async function deleteTema(id, nome) {
@@ -3922,6 +4158,79 @@ app.get('/api/admin/temas', async (c) => {
     `).all()
 
     return c.json({ temas: temas.results })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.get('/api/admin/temas/:id', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const temaId = c.req.param('id')
+  
+  try {
+    const tema = await DB.prepare('SELECT * FROM temas WHERE id = ?').bind(temaId).first()
+    
+    if (!tema) {
+      return c.json({ error: 'Tema não encontrado' }, 404)
+    }
+
+    return c.json({ tema })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.post('/api/admin/temas', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  
+  try {
+    const { tema, area, subarea, subtopicos, prevalencia, prevalencia_numero, prioridade } = await c.req.json()
+
+    if (!tema || !area || !subarea || !prevalencia || !prevalencia_numero) {
+      return c.json({ error: 'Campos obrigatórios faltando' }, 400)
+    }
+
+    await DB.prepare(`
+      INSERT INTO temas (tema, area, subarea, subtopicos, prevalencia, prevalencia_numero, prioridade)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(tema, area, subarea, subtopicos, prevalencia, prevalencia_numero, prioridade).run()
+
+    return c.json({ success: true })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.put('/api/admin/temas/:id', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const temaId = c.req.param('id')
+  
+  try {
+    const { tema, area, subarea, subtopicos, prevalencia, prevalencia_numero, prioridade } = await c.req.json()
+
+    if (!tema || !area || !subarea || !prevalencia || !prevalencia_numero) {
+      return c.json({ error: 'Campos obrigatórios faltando' }, 400)
+    }
+
+    await DB.prepare(`
+      UPDATE temas 
+      SET tema = ?, area = ?, subarea = ?, subtopicos = ?, prevalencia = ?, prevalencia_numero = ?, prioridade = ?
+      WHERE id = ?
+    `).bind(tema, area, subarea, subtopicos, prevalencia, prevalencia_numero, prioridade, temaId).run()
+
+    return c.json({ success: true })
 
   } catch (error: any) {
     return c.json({ error: error.message }, 500)
