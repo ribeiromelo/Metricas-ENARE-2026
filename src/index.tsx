@@ -152,28 +152,50 @@ app.post('/api/ciclo/gerar', async (c) => {
       }
     }
 
-    // 5. Inserir no banco
+    // 5. Inserir no banco usando BATCH para performance
     const hoje = new Date().toISOString().split('T')[0]
     
+    // Usar batch do D1 para inserir todas as semanas de uma vez
+    const batchStatements = []
+    
     for (const sg of semanasGeradas) {
-      // Inserir semana
-      const semanaResult = await DB.prepare(`
-        INSERT INTO semanas (numero_semana, data_inicio, data_fim, usuario_id) 
-        VALUES (?, ?, ?, ?)
-      `).bind(sg.semana, hoje, hoje, usuarioId).run()
-
-      const semanaId = semanaResult.meta.last_row_id
-
-      // Inserir relação semana-tema
+      // Preparar INSERT de semana
+      batchStatements.push(
+        DB.prepare(`
+          INSERT INTO semanas (numero_semana, data_inicio, data_fim, usuario_id) 
+          VALUES (?, ?, ?, ?)
+        `).bind(sg.semana, hoje, hoje, usuarioId)
+      )
+    }
+    
+    // Executar batch de semanas
+    const semanaResults = await DB.batch(batchStatements)
+    
+    // Agora inserir semana_temas em batch também
+    const temasBatchStatements = []
+    
+    for (let idx = 0; idx < semanasGeradas.length; idx++) {
+      const sg = semanasGeradas[idx]
+      const semanaId = semanaResults[idx].meta.last_row_id
+      
       for (let i = 0; i < sg.temas.length; i++) {
         const tema = sg.temas[i]
         const metodo = ['Clínica Médica', 'Cirurgia Geral', 'Obstetrícia', 'Ginecologia'].includes(tema.area) ? 'questoes' : 'teoria'
         
-        await DB.prepare(`
-          INSERT INTO semana_temas (semana_id, tema_id, ordem, metodo, meta_questoes, meta_tempo_minutos)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(semanaId, tema.id, i + 1, metodo, 15, 60).run()
+        temasBatchStatements.push(
+          DB.prepare(`
+            INSERT INTO semana_temas (semana_id, tema_id, ordem, metodo, meta_questoes, meta_tempo_minutos)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(semanaId, tema.id, i + 1, metodo, 15, 60)
+        )
       }
+    }
+    
+    // Executar batch de temas (dividir em chunks de 50 para não exceder limites)
+    const chunkSize = 50
+    for (let i = 0; i < temasBatchStatements.length; i += chunkSize) {
+      const chunk = temasBatchStatements.slice(i, i + chunkSize)
+      await DB.batch(chunk)
     }
 
     // 6. Atualizar configuração
