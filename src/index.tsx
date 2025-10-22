@@ -1065,106 +1065,10 @@ app.post('/api/config', async (c) => {
 })
 
 // ====================================================
-// FRONTEND: LANDING PAGE
+// FRONTEND: ROTA RAIZ (REDIRECIONA PARA HOME)
 // ====================================================
-app.get('/', async (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HardMed - Sistema Inteligente de Estudos ENARE 2026</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <style>
-            @keyframes float {
-                0%, 100% { transform: translateY(0px); }
-                50% { transform: translateY(-20px); }
-            }
-            .float-animation {
-                animation: float 3s ease-in-out infinite;
-            }
-        </style>
-    </head>
-    <body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 min-h-screen">
-        <!-- Hero Section -->
-        <div class="container mx-auto px-4 py-16">
-            <!-- Header -->
-            <div class="text-center mb-16">
-                <div class="inline-block bg-white bg-opacity-10 backdrop-blur-sm p-6 rounded-3xl mb-6 float-animation">
-                    <i class="fas fa-brain text-white text-7xl"></i>
-                </div>
-                <h1 class="text-6xl md:text-7xl font-bold text-white mb-4">
-                    HardMed
-                </h1>
-                <p class="text-2xl md:text-3xl text-purple-200 mb-2">
-                    Sistema Inteligente de Estudos
-                </p>
-                <p class="text-xl text-purple-300">
-                    ENARE 2026
-                </p>
-            </div>
-
-            <!-- Features Grid -->
-            <div class="grid md:grid-cols-3 gap-8 mb-16">
-                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
-                    <div class="text-5xl mb-4">🎯</div>
-                    <h3 class="text-2xl font-bold text-white mb-3">419 Temas</h3>
-                    <p class="text-purple-200">Baseados em editais anteriores do ENARE, organizados por prevalência e prioridade.</p>
-                </div>
-                
-                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
-                    <div class="text-5xl mb-4">🔄</div>
-                    <h3 class="text-2xl font-bold text-white mb-3">Revisões Inteligentes</h3>
-                    <p class="text-purple-200">Sistema de espaçamento repetido (1, 7, 30 dias) para fixação eficiente.</p>
-                </div>
-                
-                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
-                    <div class="text-5xl mb-4">📊</div>
-                    <h3 class="text-2xl font-bold text-white mb-3">Métricas Detalhadas</h3>
-                    <p class="text-purple-200">Acompanhe seu progresso, acurácia, tempo de estudo e evolução semanal.</p>
-                </div>
-            </div>
-
-            <!-- CTA -->
-            <div class="text-center">
-                <a href="/login" class="inline-block bg-white text-purple-900 px-12 py-4 rounded-full text-xl font-bold hover:bg-purple-100 transition shadow-2xl hover:shadow-purple-500/50 hover:scale-105 transform">
-                    <i class="fas fa-rocket mr-2"></i>Começar Agora
-                </a>
-                <p class="text-purple-200 mt-6">
-                    Já tem uma conta? <a href="/login" class="text-white font-bold underline hover:text-purple-200">Fazer login</a>
-                </p>
-            </div>
-
-            <!-- Stats -->
-            <div class="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div class="text-center">
-                    <div class="text-4xl font-bold text-white mb-2">419</div>
-                    <div class="text-purple-200 text-sm">Temas Médicos</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold text-white mb-2">40</div>
-                    <div class="text-purple-200 text-sm">Semanas de Ciclo</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold text-white mb-2">3</div>
-                    <div class="text-purple-200 text-sm">Níveis de Revisão</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold text-white mb-2">∞</div>
-                    <div class="text-purple-200 text-sm">Possibilidades</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="text-center py-6 text-purple-300 text-sm">
-            <p>Criado com muito <span class="text-red-400">❤️</span> por <strong>Erique Melo</strong> e muito ☕</p>
-        </footer>
-    </body>
-    </html>
-  `)
+app.get('/', (c) => {
+  return c.redirect('/home')
 })
 
 // ====================================================
