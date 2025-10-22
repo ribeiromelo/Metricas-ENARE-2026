@@ -3786,6 +3786,34 @@ app.get('/admin', async (c) => {
             </div>
         </div>
 
+        <!-- Modal: Detalhes do Aluno -->
+        <div id="modal-user-details" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto my-4">
+                <div class="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between z-10">
+                    <h3 class="text-2xl font-bold flex items-center">
+                        <i class="fas fa-user-graduate mr-3"></i>
+                        <span id="user-details-name">Detalhes do Aluno</span>
+                    </h3>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="exportUserPDF()" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg transition flex items-center">
+                            <i class="fas fa-file-pdf mr-2"></i>Exportar PDF
+                        </button>
+                        <button onclick="closeUserDetailsModal()" class="text-white hover:text-gray-200 text-2xl">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="user-details-content" class="p-6">
+                    <div class="text-center py-12">
+                        <i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+                        <p class="text-gray-600 mt-4">Carregando dados do aluno...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
         <script>
             // Tabs
             function showAdminTab(tabName) {
@@ -3921,10 +3949,289 @@ app.get('/admin', async (c) => {
             }
 
             // View User Details
+            let currentUserData = null
+            
             async function viewUserDetails(userId) {
-                const res = await fetch(\`/api/admin/usuarios/\${userId}\`)
-                const data = await res.json()
-                alert(\`Usuário: \${data.usuario.nome}\\nEmail: \${data.usuario.email}\\nTotal Estudos: \${data.total_estudos}\\nTotal Questões: \${data.total_questoes}\`)
+                document.getElementById('modal-user-details').classList.remove('hidden')
+                
+                try {
+                    const res = await fetch(\`/api/admin/usuarios/\${userId}/detalhes\`)
+                    currentUserData = await res.json()
+                    
+                    if (currentUserData.error) {
+                        document.getElementById('user-details-content').innerHTML = \`
+                            <div class="text-center py-12">
+                                <i class="fas fa-exclamation-circle text-4xl text-red-600"></i>
+                                <p class="text-gray-600 mt-4">\${currentUserData.error}</p>
+                            </div>
+                        \`
+                        return
+                    }
+                    
+                    const u = currentUserData.usuario
+                    const stats = currentUserData.stats
+                    const areasData = currentUserData.por_area
+                    
+                    document.getElementById('user-details-name').textContent = u.nome
+                    
+                    // Calcular pontos fortes e fracos
+                    const areas = areasData.sort((a, b) => b.acuracia - a.acuracia)
+                    const pontosFortesHTML = areas.slice(0, 2).map(a => \`
+                        <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-green-800">\${a.area}</p>
+                                    <p class="text-sm text-green-600">\${a.total_estudos} estudos · \${a.acuracia.toFixed(1)}% acurácia</p>
+                                </div>
+                                <i class="fas fa-trophy text-3xl text-green-500"></i>
+                            </div>
+                        </div>
+                    \`).join('')
+                    
+                    const pontosFracosHTML = areas.slice(-2).reverse().map(a => \`
+                        <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-red-800">\${a.area}</p>
+                                    <p class="text-sm text-red-600">\${a.total_estudos} estudos · \${a.acuracia.toFixed(1)}% acurácia</p>
+                                </div>
+                                <i class="fas fa-exclamation-triangle text-3xl text-red-500"></i>
+                            </div>
+                        </div>
+                    \`).join('')
+                    
+                    // Recomendações personalizadas
+                    let recomendacoes = []
+                    if (stats.acuracia_media < 60) {
+                        recomendacoes.push('📚 <strong>Prioridade:</strong> Revisar conceitos básicos antes de avançar')
+                    }
+                    if (stats.tempo_medio_minutos < 40) {
+                        recomendacoes.push('⏰ <strong>Tempo:</strong> Dedicar mais tempo por tema (mínimo 60min)')
+                    }
+                    if (stats.dias_estudo < 10) {
+                        recomendacoes.push('📅 <strong>Consistência:</strong> Estabelecer rotina diária de estudos')
+                    }
+                    if (stats.revisoes_pendentes > 10) {
+                        recomendacoes.push('🔄 <strong>Revisões:</strong> Priorizar revisões pendentes (\${stats.revisoes_pendentes})')
+                    }
+                    const areasFracas = areas.filter(a => a.acuracia < 60)
+                    if (areasFracas.length > 0) {
+                        recomendacoes.push(\`🎯 <strong>Foco:</strong> Intensificar estudo em \${areasFracas.map(a => a.area).join(', ')}\`)
+                    }
+                    if (recomendacoes.length === 0) {
+                        recomendacoes.push('🌟 <strong>Parabéns!</strong> Continue com o excelente trabalho!')
+                    }
+                    
+                    document.getElementById('user-details-content').innerHTML = \`
+                        <!-- Informações Básicas -->
+                        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 mb-6">
+                            <div class="grid md:grid-cols-4 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600">Email</p>
+                                    <p class="font-semibold text-gray-800">\${u.email}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Data da Prova</p>
+                                    <p class="font-semibold text-gray-800">\${u.data_prova ? new Date(u.data_prova).toLocaleDateString('pt-BR') : 'Não definida'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Membro desde</p>
+                                    <p class="font-semibold text-gray-800">\${new Date(u.created_at).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Último acesso</p>
+                                    <p class="font-semibold text-gray-800">\${u.last_login ? new Date(u.last_login).toLocaleDateString('pt-BR') : 'Nunca'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Métricas Principais -->
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-chart-bar text-indigo-600 mr-3"></i>Métricas Gerais
+                        </h3>
+                        <div class="grid md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-white border-2 border-indigo-200 rounded-xl p-4 text-center">
+                                <i class="fas fa-graduation-cap text-3xl text-indigo-600 mb-2"></i>
+                                <p class="text-3xl font-bold text-gray-800">\${stats.total_estudos}</p>
+                                <p class="text-sm text-gray-600">Estudos Realizados</p>
+                            </div>
+                            <div class="bg-white border-2 border-green-200 rounded-xl p-4 text-center">
+                                <i class="fas fa-question-circle text-3xl text-green-600 mb-2"></i>
+                                <p class="text-3xl font-bold text-gray-800">\${stats.total_questoes}</p>
+                                <p class="text-sm text-gray-600">Questões Resolvidas</p>
+                            </div>
+                            <div class="bg-white border-2 border-blue-200 rounded-xl p-4 text-center">
+                                <i class="fas fa-clock text-3xl text-blue-600 mb-2"></i>
+                                <p class="text-3xl font-bold text-gray-800">\${Math.floor(stats.tempo_total_minutos / 60)}h</p>
+                                <p class="text-sm text-gray-600">Tempo de Estudo</p>
+                            </div>
+                            <div class="bg-white border-2 border-purple-200 rounded-xl p-4 text-center">
+                                <i class="fas fa-percentage text-3xl text-purple-600 mb-2"></i>
+                                <p class="text-3xl font-bold text-gray-800">\${stats.acuracia_media.toFixed(1)}%</p>
+                                <p class="text-sm text-gray-600">Acurácia Média</p>
+                            </div>
+                        </div>
+
+                        <!-- Mais Métricas -->
+                        <div class="grid md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-white border-l-4 border-orange-500 rounded-lg p-4">
+                                <p class="text-sm text-gray-600">Tempo Médio/Tema</p>
+                                <p class="text-2xl font-bold text-gray-800">\${stats.tempo_medio_minutos.toFixed(0)}min</p>
+                            </div>
+                            <div class="bg-white border-l-4 border-pink-500 rounded-lg p-4">
+                                <p class="text-sm text-gray-600">Dias com Estudo</p>
+                                <p class="text-2xl font-bold text-gray-800">\${stats.dias_estudo}</p>
+                            </div>
+                            <div class="bg-white border-l-4 border-teal-500 rounded-lg p-4">
+                                <p class="text-sm text-gray-600">Temas Diferentes</p>
+                                <p class="text-2xl font-bold text-gray-800">\${stats.temas_estudados}</p>
+                            </div>
+                            <div class="bg-white border-l-4 border-red-500 rounded-lg p-4">
+                                <p class="text-sm text-gray-600">Revisões Pendentes</p>
+                                <p class="text-2xl font-bold text-gray-800">\${stats.revisoes_pendentes}</p>
+                            </div>
+                        </div>
+
+                        <!-- Performance por Área -->
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4 flex items-center mt-8">
+                            <i class="fas fa-star text-yellow-500 mr-3"></i>Performance por Área
+                        </h3>
+                        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                            <canvas id="chart-areas" width="400" height="200"></canvas>
+                        </div>
+
+                        <!-- Pontos Fortes e Fracos -->
+                        <div class="grid md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <h3 class="text-xl font-bold text-green-700 mb-4 flex items-center">
+                                    <i class="fas fa-check-circle mr-2"></i>Pontos Fortes
+                                </h3>
+                                <div class="space-y-3">
+                                    \${pontosFortesHTML || '<p class="text-gray-500">Nenhum estudo registrado ainda</p>'}
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-red-700 mb-4 flex items-center">
+                                    <i class="fas fa-times-circle mr-2"></i>Áreas para Melhorar
+                                </h3>
+                                <div class="space-y-3">
+                                    \${pontosFracosHTML || '<p class="text-gray-500">Nenhum estudo registrado ainda</p>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recomendações -->
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4 flex items-center mt-8">
+                            <i class="fas fa-lightbulb text-yellow-500 mr-3"></i>Recomendações Personalizadas
+                        </h3>
+                        <div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-6 mb-6">
+                            <ul class="space-y-3">
+                                \${recomendacoes.map(r => \`<li class="flex items-start"><span class="mr-2">•</span><span>\${r}</span></li>\`).join('')}
+                            </ul>
+                        </div>
+
+                        <!-- Progresso no Tempo -->
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4 flex items-center mt-8">
+                            <i class="fas fa-chart-line text-indigo-600 mr-3"></i>Evolução no Tempo
+                        </h3>
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <canvas id="chart-evolucao" width="400" height="200"></canvas>
+                        </div>
+                    \`
+                    
+                    // Criar gráficos
+                    setTimeout(() => {
+                        // Gráfico por área
+                        const ctxAreas = document.getElementById('chart-areas').getContext('2d')
+                        new Chart(ctxAreas, {
+                            type: 'bar',
+                            data: {
+                                labels: areasData.map(a => a.area),
+                                datasets: [{
+                                    label: 'Acurácia (%)',
+                                    data: areasData.map(a => a.acuracia),
+                                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                                    borderColor: 'rgba(99, 102, 241, 1)',
+                                    borderWidth: 2
+                                }, {
+                                    label: 'Estudos',
+                                    data: areasData.map(a => a.total_estudos),
+                                    backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                                    borderColor: 'rgba(34, 197, 94, 1)',
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { position: 'top' }
+                                },
+                                scales: {
+                                    y: { beginAtZero: true }
+                                }
+                            }
+                        })
+                        
+                        // Gráfico de evolução
+                        const evolucao = currentUserData.evolucao || []
+                        const ctxEvolucao = document.getElementById('chart-evolucao').getContext('2d')
+                        new Chart(ctxEvolucao, {
+                            type: 'line',
+                            data: {
+                                labels: evolucao.map(e => new Date(e.data).toLocaleDateString('pt-BR')),
+                                datasets: [{
+                                    label: 'Acurácia (%)',
+                                    data: evolucao.map(e => e.acuracia),
+                                    borderColor: 'rgba(99, 102, 241, 1)',
+                                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                    tension: 0.4,
+                                    fill: true
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { position: 'top' }
+                                },
+                                scales: {
+                                    y: { 
+                                        beginAtZero: true,
+                                        max: 100
+                                    }
+                                }
+                            }
+                        })
+                    }, 100)
+                    
+                } catch (error) {
+                    console.error(error)
+                    document.getElementById('user-details-content').innerHTML = \`
+                        <div class="text-center py-12">
+                            <i class="fas fa-exclamation-circle text-4xl text-red-600"></i>
+                            <p class="text-gray-600 mt-4">Erro ao carregar dados do aluno</p>
+                        </div>
+                    \`
+                }
+            }
+
+            function closeUserDetailsModal() {
+                document.getElementById('modal-user-details').classList.add('hidden')
+                currentUserData = null
+            }
+
+            function exportUserPDF() {
+                if (!currentUserData) return
+                
+                const element = document.getElementById('user-details-content')
+                const opt = {
+                    margin: 10,
+                    filename: \`relatorio_\${currentUserData.usuario.nome.replace(/ /g, '_')}_\${new Date().toISOString().split('T')[0]}.pdf\`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }
+                
+                html2pdf().set(opt).from(element).save()
             }
 
             // Adicionar Tema
@@ -4138,6 +4445,81 @@ app.get('/api/admin/usuarios/:id', async (c) => {
       usuario, 
       total_estudos: totalEstudos?.total || 0,
       total_questoes: totalQuestoes?.total || 0
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.get('/api/admin/usuarios/:id/detalhes', async (c) => {
+  const auth = await requireAdmin(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const userId = c.req.param('id')
+  
+  try {
+    const usuario = await DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(userId).first()
+    
+    if (!usuario) {
+      return c.json({ error: 'Usuário não encontrado' }, 404)
+    }
+
+    // Estatísticas gerais
+    const stats = await DB.prepare(`
+      SELECT 
+        COUNT(*) as total_estudos,
+        COALESCE(SUM(questoes_feitas), 0) as total_questoes,
+        COALESCE(SUM(tempo_minutos), 0) as tempo_total_minutos,
+        COALESCE(AVG(tempo_minutos), 0) as tempo_medio_minutos,
+        COALESCE(AVG(CASE WHEN acuracia > 0 THEN acuracia ELSE NULL END), 0) as acuracia_media,
+        COUNT(DISTINCT data_estudo) as dias_estudo,
+        COUNT(DISTINCT tema_id) as temas_estudados
+      FROM estudos 
+      WHERE usuario_id = ?
+    `).bind(userId).first()
+
+    // Revisões pendentes
+    const revisoesPendentes = await DB.prepare(`
+      SELECT COUNT(*) as count FROM revisoes 
+      WHERE usuario_id = ? AND concluida = 0
+    `).bind(userId).first()
+
+    // Performance por área
+    const porArea = await DB.prepare(`
+      SELECT 
+        t.area,
+        COUNT(e.id) as total_estudos,
+        COALESCE(AVG(CASE WHEN e.acuracia > 0 THEN e.acuracia ELSE NULL END), 0) as acuracia,
+        COALESCE(SUM(e.questoes_feitas), 0) as questoes
+      FROM estudos e
+      INNER JOIN temas t ON e.tema_id = t.id
+      WHERE e.usuario_id = ?
+      GROUP BY t.area
+      ORDER BY acuracia DESC
+    `).bind(userId).all()
+
+    // Evolução temporal (últimos 30 dias)
+    const evolucao = await DB.prepare(`
+      SELECT 
+        data_estudo as data,
+        COALESCE(AVG(CASE WHEN acuracia > 0 THEN acuracia ELSE NULL END), 0) as acuracia,
+        COUNT(*) as estudos
+      FROM estudos 
+      WHERE usuario_id = ? AND data_estudo >= date('now', '-30 days')
+      GROUP BY data_estudo
+      ORDER BY data_estudo ASC
+    `).bind(userId).all()
+
+    return c.json({
+      usuario,
+      stats: {
+        ...stats,
+        revisoes_pendentes: revisoesPendentes?.count || 0
+      },
+      por_area: porArea.results,
+      evolucao: evolucao.results
     })
 
   } catch (error: any) {
