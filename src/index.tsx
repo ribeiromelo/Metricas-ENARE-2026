@@ -1132,62 +1132,55 @@ app.get('/', async (c) => {
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
         <!-- Header -->
-        <header class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-2xl relative overflow-hidden">
-            <!-- Efeito de brilho animado -->
-            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer"></div>
-            
-            <div class="max-w-7xl mx-auto px-4 py-8 relative z-10">
-                <div class="flex items-center justify-between">
-                    <!-- Logo e Título -->
-                    <div class="flex items-center space-x-5">
-                        <div class="bg-white bg-opacity-20 backdrop-blur-sm p-4 rounded-2xl shadow-xl transform hover:scale-110 transition-all duration-300">
-                            <i class="fas fa-brain text-white text-4xl"></i>
+        <header style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" class="shadow-2xl">
+            <div class="max-w-7xl mx-auto px-6 py-6">
+                <!-- Top Row: Logo + Actions -->
+                <div class="flex items-center justify-between mb-4">
+                    <!-- Logo e Título (Compacto) -->
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-white bg-opacity-20 backdrop-blur-sm p-3 rounded-xl">
+                            <i class="fas fa-brain text-white text-3xl"></i>
                         </div>
                         <div>
-                            <h1 class="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
-                                Cérebro de Estudos HardMed
-                            </h1>
-                            <p class="text-indigo-100 text-lg font-medium mt-1 drop-shadow">
-                                <i class="fas fa-graduation-cap mr-2"></i>Sistema Inteligente de Revisões ENARE
-                            </p>
+                            <h1 class="text-2xl font-bold text-white">HardMed</h1>
+                            <p class="text-white text-opacity-80 text-sm">ENARE 2026</p>
                         </div>
                     </div>
                     
-                    <!-- Ações do Header -->
-                    <div class="flex items-center space-x-6">
-                        <!-- Semana Atual -->
-                        <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl px-6 py-3 shadow-xl border border-white border-opacity-30">
-                            <p class="text-indigo-100 text-sm font-semibold mb-1">Semana Atual</p>
-                            <p class="text-3xl font-bold text-white" id="semana-atual">--</p>
-                        </div>
+                    <!-- Actions: Admin + Theme + User -->
+                    <div class="flex items-center space-x-3">
+                        <!-- Botão Admin (condicional) -->
+                        ${auth.usuario.is_admin ? \`
+                        <a href="/admin" 
+                           class="bg-white bg-opacity-20 backdrop-blur-sm hover:bg-opacity-30 px-4 py-2 rounded-lg transition text-white font-semibold text-sm border border-white border-opacity-30">
+                            <i class="fas fa-shield-alt mr-2"></i>Admin
+                        </a>
+                        \` : ''}
                         
-                        <!-- Controles -->
-                        <div class="flex items-center space-x-4">
-                            <!-- Botão de Tema -->
-                            <button onclick="toggleTheme()" 
-                                    class="bg-white bg-opacity-20 backdrop-blur-sm hover:bg-opacity-30 px-5 py-3 rounded-xl transition-all duration-300 shadow-lg border border-white border-opacity-30 transform hover:scale-105" 
-                                    title="Alternar tema">
-                                <i id="theme-icon" class="fas fa-moon text-white text-xl"></i>
-                            </button>
-                            
-                            <!-- Info do Usuário -->
-                            <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl px-6 py-3 shadow-xl border border-white border-opacity-30">
-                                <p class="text-indigo-100 text-sm font-semibold mb-1">
-                                    <i class="fas fa-user-circle mr-2"></i>Olá, ${nomeUsuario}!
-                                </p>
+                        <!-- Botão Theme -->
+                        <button onclick="toggleTheme()" 
+                                class="bg-white bg-opacity-20 backdrop-blur-sm hover:bg-opacity-30 p-3 rounded-lg transition border border-white border-opacity-30" 
+                                title="Alternar tema">
+                            <i id="theme-icon" class="fas fa-moon text-white"></i>
+                        </button>
+                        
+                        <!-- User Menu -->
+                        <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white border-opacity-30">
+                            <div class="flex items-center space-x-3">
+                                <div class="text-right">
+                                    <p class="text-white text-sm font-semibold">${nomeUsuario}</p>
+                                    <p class="text-white text-opacity-70 text-xs">Semana <span id="semana-atual">--</span></p>
+                                </div>
                                 <button onclick="logout()" 
-                                        class="text-sm text-white hover:text-red-200 font-bold transition-colors duration-200 flex items-center group">
-                                    <i class="fas fa-sign-out-alt mr-2 group-hover:scale-110 transition-transform"></i>
-                                    Sair
+                                        class="bg-white bg-opacity-20 hover:bg-opacity-30 p-2 rounded-lg transition"
+                                        title="Sair">
+                                    <i class="fas fa-sign-out-alt text-white"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Linha decorativa inferior -->
-            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300"></div>
         </header>
 
         <!-- Main Content -->
