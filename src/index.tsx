@@ -897,6 +897,92 @@ app.get('/api/metricas', async (c) => {
 })
 
 // ====================================================
+// API: DASHBOARD COMPLETO (UNIFIED - 1 REQUEST ONLY!)
+// ====================================================
+app.get('/api/dashboard-completo', async (c) => {
+  const auth = await requireAuth(c)
+  if (auth.error) return c.json({ error: auth.error }, auth.status)
+
+  const { DB } = c.env
+  const usuarioId = auth.usuario.usuario_id
+  
+  try {
+    const hoje = getDataISOBrasil()
+
+    // Buscar semana atual da configuração
+    const config = await DB.prepare('SELECT semana_atual FROM configuracoes WHERE usuario_id = ?')
+      .bind(usuarioId).first()
+    const semanaAtual = config?.semana_atual || 1
+
+    // Executar TUDO em paralelo com batch (super rápido!)
+    const [semanaData, temasData, revisoesData, metricasBasicas, metricasRevisoes] = await Promise.all([
+      // 1. Dados da semana
+      DB.prepare('SELECT * FROM semanas WHERE numero_semana = ? AND usuario_id = ?')
+        .bind(semanaAtual, usuarioId).first(),
+      
+      // 2. Temas da semana (com status de estudado)
+      DB.prepare(`
+        SELECT st.*, t.*, 
+          (SELECT COUNT(*) FROM estudos e WHERE e.tema_id = t.id AND e.usuario_id = ?) as ja_estudado
+        FROM semana_temas st
+        INNER JOIN temas t ON st.tema_id = t.id
+        INNER JOIN semanas s ON st.semana_id = s.id
+        WHERE s.numero_semana = ? AND s.usuario_id = ?
+        ORDER BY st.ordem
+      `).bind(usuarioId, semanaAtual, usuarioId).all(),
+      
+      // 3. Revisões pendentes (limitado a 20)
+      DB.prepare(`
+        SELECT r.*, t.tema, t.area, t.prevalencia, t.prevalencia_numero
+        FROM revisoes r
+        INNER JOIN temas t ON r.tema_id = t.id
+        INNER JOIN estudos e ON r.estudo_id = e.id
+        WHERE r.concluida = 0 AND e.usuario_id = ?
+        ORDER BY r.data_agendada ASC, t.prevalencia_numero DESC
+        LIMIT 20
+      `).bind(usuarioId).all(),
+      
+      // 4. Métricas básicas (combinadas)
+      DB.prepare(`
+        SELECT 
+          COUNT(*) as total_estudos,
+          COALESCE(SUM(questoes_feitas), 0) as total_questoes,
+          COALESCE(SUM(tempo_minutos), 0) as tempo_total_minutos,
+          COALESCE(AVG(CASE WHEN acuracia > 0 THEN acuracia ELSE NULL END), 0) as acuracia_media
+        FROM estudos WHERE usuario_id = ?
+      `).bind(usuarioId).first(),
+      
+      // 5. Métricas de revisões (combinadas)
+      DB.prepare(`
+        SELECT 
+          COUNT(CASE WHEN r.concluida = 0 AND r.data_agendada <= ? THEN 1 END) as pendentes
+        FROM revisoes r
+        INNER JOIN estudos e ON r.estudo_id = e.id
+        WHERE e.usuario_id = ?
+      `).bind(hoje, usuarioId).first()
+    ])
+
+    return c.json({
+      semana: {
+        numero_semana: semanaAtual,
+        ...semanaData
+      },
+      temas: temasData.results || [],
+      revisoes: revisoesData.results || [],
+      metricas: {
+        total_estudos: metricasBasicas?.total_estudos || 0,
+        total_questoes: metricasBasicas?.total_questoes || 0,
+        acuracia_media: metricasBasicas?.acuracia_media || 0,
+        revisoes_pendentes: metricasRevisoes?.pendentes || 0
+      }
+    })
+
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// ====================================================
 // API: CONFIGURAÇÕES
 // ====================================================
 app.get('/api/config', async (c) => {
@@ -1653,14 +1739,17 @@ app.get('/', async (c) => {
         // Dashboard
         async function loadDashboard() {
           try {
-            const semanaRes = await fetch('/api/semana/atual')
-            const semanaData = await semanaRes.json()
+            // OTIMIZAÇÃO: Uma única chamada API em vez de 3!
+            const dashboardRes = await fetch('/api/dashboard-completo')
+            const data = await dashboardRes.json()
             
-            document.getElementById('semana-atual').textContent = semanaData.semana?.numero_semana || '--'
+            // Atualizar semana atual
+            document.getElementById('semana-atual').textContent = data.semana?.numero_semana || '--'
 
+            // Renderizar guia do dia
             const guiaDiv = document.getElementById('guia-do-dia')
-            if (semanaData.temas && semanaData.temas.length > 0) {
-              guiaDiv.innerHTML = semanaData.temas.map(t => \`
+            if (data.temas && data.temas.length > 0) {
+              guiaDiv.innerHTML = data.temas.map(t => \`
                 <div class="border border-gray-200 rounded-lg p-4 hover:border-indigo-400 transition">
                   <div class="flex items-start justify-between">
                     <div class="flex-1">
@@ -1685,14 +1774,12 @@ app.get('/', async (c) => {
               guiaDiv.innerHTML = '<p class="text-gray-600">Nenhum tema para hoje! 🎉</p>'
             }
 
-            const revisoesRes = await fetch('/api/revisoes/pendentes')
-            const revisoesData = await revisoesRes.json()
-            
+            // Renderizar revisões pendentes
             const revisoesDiv = document.getElementById('revisoes-do-dia')
-            if (revisoesData.revisoes && revisoesData.revisoes.length > 0) {
+            if (data.revisoes && data.revisoes.length > 0) {
               const hoje = getDataHojeBrasil()
               
-              revisoesDiv.innerHTML = revisoesData.revisoes.slice(0, 5).map(r => {
+              revisoesDiv.innerHTML = data.revisoes.slice(0, 5).map(r => {
                 const dataAgendada = new Date(r.data_agendada + 'T00:00:00-03:00')
                 const dataFormatada = formatarDataBR(r.data_agendada)
                 const podeRevisar = dataAgendada <= hoje
@@ -1720,15 +1807,12 @@ app.get('/', async (c) => {
               revisoesDiv.innerHTML = '<p class="text-gray-600">Nenhuma revisão pendente hoje 🎉</p>'
             }
 
-            // Quick stats
-            const metricasRes = await fetch('/api/metricas')
-            const metricasData = await metricasRes.json()
-            
+            // Atualizar quick stats
             const stats = document.querySelectorAll('#quick-stats .text-3xl')
-            stats[0].textContent = metricasData.total_estudos || 0
-            stats[1].textContent = metricasData.total_questoes || 0
-            stats[2].textContent = metricasData.acuracia_media ? metricasData.acuracia_media.toFixed(1) + '%' : '--'
-            stats[3].textContent = metricasData.revisoes_pendentes || 0
+            stats[0].textContent = data.metricas.total_estudos || 0
+            stats[1].textContent = data.metricas.total_questoes || 0
+            stats[2].textContent = data.metricas.acuracia_media ? data.metricas.acuracia_media.toFixed(1) + '%' : '--'
+            stats[3].textContent = data.metricas.revisoes_pendentes || 0
 
           } catch (error) {
             console.error('Erro ao carregar dashboard:', error)
