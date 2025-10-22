@@ -2365,17 +2365,31 @@ app.get('/dashboard', async (c) => {
               // Mostrar alerta se existir
               if (data.ciclo.mensagem_alerta) {
                 alertaDiv.classList.remove('hidden')
-                const corAlerta = data.ciclo.semanas_reais < 10 ? 'red' : data.ciclo.semanas_reais < 20 ? 'yellow' : 'blue'
-                alertaDiv.innerHTML = \`
-                  <div class="bg-\${corAlerta}-50 border-l-4 border-\${corAlerta}-500 p-4 rounded">
-                    <div class="flex items-start">
-                      <i class="fas fa-info-circle text-\${corAlerta}-500 text-xl mr-3 mt-1"></i>
-                      <div>
-                        <p class="text-\${corAlerta}-900 font-semibold">\${data.ciclo.mensagem_alerta}</p>
-                      </div>
-                    </div>
-                  </div>
-                \`
+                
+                let bgAlert, borderAlert, textAlert, iconAlert
+                if (data.ciclo.semanas_reais < 10) {
+                  bgAlert = 'bg-red-50'
+                  borderAlert = 'border-red-500'
+                  textAlert = 'text-red-900'
+                  iconAlert = 'text-red-500'
+                } else if (data.ciclo.semanas_reais < 20) {
+                  bgAlert = 'bg-yellow-50'
+                  borderAlert = 'border-yellow-500'
+                  textAlert = 'text-yellow-900'
+                  iconAlert = 'text-yellow-500'
+                } else {
+                  bgAlert = 'bg-blue-50'
+                  borderAlert = 'border-blue-500'
+                  textAlert = 'text-blue-900'
+                  iconAlert = 'text-blue-500'
+                }
+                
+                alertaDiv.innerHTML = '<div class="' + bgAlert + ' border-l-4 ' + borderAlert + ' p-4 rounded">' +
+                  '<div class="flex items-start">' +
+                    '<i class="fas fa-info-circle ' + iconAlert + ' text-xl mr-3 mt-1"></i>' +
+                    '<div><p class="' + textAlert + ' font-semibold">' + data.ciclo.mensagem_alerta + '</p></div>' +
+                  '</div>' +
+                '</div>'
               }
 
               // Renderizar estatísticas
@@ -2385,29 +2399,30 @@ app.get('/dashboard', async (c) => {
                 'semi-intensivo': 'Semi-intensivo',
                 'intensivo': 'Intensivo'
               }
+              
+              const totalTemas = data.ciclo.temas_alta + data.ciclo.temas_media + data.ciclo.temas_baixa
+              const statusEmoji = data.ciclo.status === 'ativo' ? '✅ Ativo' : data.ciclo.status === 'pausado' ? '⏸️ Pausado' : '❌ Cancelado'
 
-              statsDiv.innerHTML = \`
-                <div class="bg-indigo-50 p-4 rounded-lg">
-                  <p class="text-xs text-indigo-600 font-semibold uppercase">Tipo</p>
-                  <p class="text-2xl font-bold text-indigo-600">\${tipoCicloNome[data.ciclo.tipo_ciclo]}</p>
-                </div>
-                <div class="bg-blue-50 p-4 rounded-lg">
-                  <p class="text-xs text-blue-600 font-semibold uppercase">Semanas</p>
-                  <p class="text-2xl font-bold text-blue-600">\${data.ciclo.semanas_reais}</p>
-                </div>
-                <div class="bg-green-50 p-4 rounded-lg">
-                  <p class="text-xs text-green-600 font-semibold uppercase">Total Temas</p>
-                  <p class="text-2xl font-bold text-green-600">\${data.ciclo.temas_alta + data.ciclo.temas_media + data.ciclo.temas_baixa}</p>
-                </div>
-                <div class="bg-purple-50 p-4 rounded-lg">
-                  <p class="text-xs text-purple-600 font-semibold uppercase">Progresso</p>
-                  <p class="text-2xl font-bold text-purple-600">\${data.ciclo.progresso_atual}%</p>
-                </div>
-                <div class="bg-orange-50 p-4 rounded-lg">
-                  <p class="text-xs text-orange-600 font-semibold uppercase">Status</p>
-                  <p class="text-lg font-bold text-orange-600">\${data.ciclo.status === 'ativo' ? '✅ Ativo' : data.ciclo.status === 'pausado' ? '⏸️ Pausado' : '❌ Cancelado'}</p>
-                </div>
-              \`
+              statsDiv.innerHTML = '<div class="bg-indigo-50 p-4 rounded-lg">' +
+                '<p class="text-xs text-indigo-600 font-semibold uppercase">Tipo</p>' +
+                '<p class="text-2xl font-bold text-indigo-600">' + tipoCicloNome[data.ciclo.tipo_ciclo] + '</p>' +
+              '</div>' +
+              '<div class="bg-blue-50 p-4 rounded-lg">' +
+                '<p class="text-xs text-blue-600 font-semibold uppercase">Semanas</p>' +
+                '<p class="text-2xl font-bold text-blue-600">' + data.ciclo.semanas_reais + '</p>' +
+              '</div>' +
+              '<div class="bg-green-50 p-4 rounded-lg">' +
+                '<p class="text-xs text-green-600 font-semibold uppercase">Total Temas</p>' +
+                '<p class="text-2xl font-bold text-green-600">' + totalTemas + '</p>' +
+              '</div>' +
+              '<div class="bg-purple-50 p-4 rounded-lg">' +
+                '<p class="text-xs text-purple-600 font-semibold uppercase">Progresso</p>' +
+                '<p class="text-2xl font-bold text-purple-600">' + data.ciclo.progresso_atual + '%</p>' +
+              '</div>' +
+              '<div class="bg-orange-50 p-4 rounded-lg">' +
+                '<p class="text-xs text-orange-600 font-semibold uppercase">Status</p>' +
+                '<p class="text-lg font-bold text-orange-600">' + statusEmoji + '</p>' +
+              '</div>'
 
               // Renderizar semanas
               renderizarLinhaDoTempo(data.semanas)
@@ -2428,29 +2443,48 @@ app.get('/dashboard', async (c) => {
           
           if (semanas && semanas.length > 0) {
             linhaTempoDiv.innerHTML = semanas.map(s => {
-              const statusColor = s.status === 'concluida' ? 'green' : s.status === 'em_andamento' ? 'yellow' : 'gray'
-              const statusIcon = s.status === 'concluida' ? 'fa-check-circle' : s.status === 'em_andamento' ? 'fa-spinner' : 'fa-circle'
+              let borderClass, bgClass, iconClass, barClass, iconName
               
-              return \`
-                <div class="border-2 border-\${statusColor}-200 rounded-lg p-4 hover:shadow-lg transition cursor-pointer bg-\${statusColor === 'green' ? 'green-50' : 'white'}"
-                     onclick="verTemasDoNovoCiclo(\${s.id}, \${s.numero_semana})">
-                  <div class="flex items-center justify-between mb-2">
-                    <h3 class="font-bold text-gray-800">Semana \${s.numero_semana}</h3>
-                    <i class="fas \${statusIcon} text-\${statusColor}-500"></i>
-                  </div>
-                  <p class="text-xs text-gray-600 mb-2">
-                    \${new Date(s.data_inicio).toLocaleDateString('pt-BR')} - \${new Date(s.data_fim).toLocaleDateString('pt-BR')}
-                  </p>
-                  <div class="space-y-1">
-                    <p class="text-sm text-gray-700">\${s.temas_planejados} temas</p>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                      <div class="bg-\${statusColor}-500 h-2 rounded-full" style="width: \${(s.temas_concluidos / s.temas_planejados * 100) || 0}%"></div>
-                    </div>
-                    <p class="text-xs text-gray-500">\${s.temas_concluidos}/\${s.temas_planejados} concluídos</p>
-                  </div>
-                  <p class="text-xs text-indigo-600 mt-2"><i class="fas fa-eye mr-1"></i>Ver temas</p>
-                </div>
-              \`
+              if (s.status === 'concluida') {
+                borderClass = 'border-green-300'
+                bgClass = 'bg-green-50'
+                iconClass = 'text-green-500'
+                barClass = 'bg-green-500'
+                iconName = 'fa-check-circle'
+              } else if (s.status === 'em_andamento') {
+                borderClass = 'border-yellow-300'
+                bgClass = 'bg-yellow-50'
+                iconClass = 'text-yellow-500'
+                barClass = 'bg-yellow-500'
+                iconName = 'fa-spinner'
+              } else {
+                borderClass = 'border-gray-200'
+                bgClass = 'bg-white'
+                iconClass = 'text-gray-400'
+                barClass = 'bg-gray-400'
+                iconName = 'fa-circle'
+              }
+              
+              const progresso = (s.temas_concluidos / s.temas_planejados * 100) || 0
+              const dataInicio = new Date(s.data_inicio).toLocaleDateString('pt-BR')
+              const dataFim = new Date(s.data_fim).toLocaleDateString('pt-BR')
+              
+              return '<div class="border-2 ' + borderClass + ' rounded-lg p-4 hover:shadow-lg transition cursor-pointer ' + bgClass + '" ' +
+                     'onclick="verTemasDoNovoCiclo(' + s.id + ', ' + s.numero_semana + ')">' +
+                '<div class="flex items-center justify-between mb-2">' +
+                  '<h3 class="font-bold text-gray-800">Semana ' + s.numero_semana + '</h3>' +
+                  '<i class="fas ' + iconName + ' ' + iconClass + '"></i>' +
+                '</div>' +
+                '<p class="text-xs text-gray-600 mb-2">' + dataInicio + ' - ' + dataFim + '</p>' +
+                '<div class="space-y-1">' +
+                  '<p class="text-sm text-gray-700">' + s.temas_planejados + ' temas</p>' +
+                  '<div class="w-full bg-gray-200 rounded-full h-2">' +
+                    '<div class="' + barClass + ' h-2 rounded-full" style="width: ' + progresso + '%"></div>' +
+                  '</div>' +
+                  '<p class="text-xs text-gray-500">' + s.temas_concluidos + '/' + s.temas_planejados + ' concluídos</p>' +
+                '</div>' +
+                '<p class="text-xs text-indigo-600 mt-2"><i class="fas fa-eye mr-1"></i>Ver temas</p>' +
+              '</div>'
             }).join('')
           } else {
             linhaTempoDiv.innerHTML = '<p class="text-gray-600 col-span-4">Nenhuma semana no ciclo.</p>'
@@ -2469,36 +2503,41 @@ app.get('/dashboard', async (c) => {
               return
             }
 
-            const temasHTML = semana.temas.map(t => \`
-              <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <h4 class="font-semibold text-gray-800">\${t.tema}</h4>
-                    <p class="text-sm text-gray-600 mt-1">
-                      <i class="fas fa-folder mr-1"></i>\${t.area} · \${t.subarea}
-                    </p>
-                    <p class="text-xs text-gray-500 mt-1">\${t.subtopicos || ''}</p>
-                    <div class="flex items-center mt-2 space-x-3">
-                      <span class="text-xs px-2 py-1 rounded \${t.prevalencia === 'ALTA' ? 'bg-red-100 text-red-700' : t.prevalencia === 'MÉDIA' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
-                        \${t.prevalencia}
-                      </span>
-                      <span class="text-xs text-gray-600">
-                        <i class="fas fa-check-circle \${t.status === 'concluido' ? 'text-green-500' : 'text-gray-300'} mr-1"></i>
-                        \${t.status === 'concluido' ? 'Concluído' : t.status === 'em_andamento' ? 'Em andamento' : 'Pendente'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            \`).join('')
+            const temasHTML = semana.temas.map(t => {
+              let prevClass = ''
+              if (t.prevalencia === 'ALTA') {
+                prevClass = 'bg-red-100 text-red-700'
+              } else if (t.prevalencia === 'MÉDIA') {
+                prevClass = 'bg-yellow-100 text-yellow-700'
+              } else {
+                prevClass = 'bg-green-100 text-green-700'
+              }
+              
+              const statusIcon = t.status === 'concluido' ? 'text-green-500' : 'text-gray-300'
+              const statusText = t.status === 'concluido' ? 'Concluído' : t.status === 'em_andamento' ? 'Em andamento' : 'Pendente'
+              
+              return '<div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">' +
+                '<div class="flex items-start justify-between">' +
+                  '<div class="flex-1">' +
+                    '<h4 class="font-semibold text-gray-800">' + t.tema + '</h4>' +
+                    '<p class="text-sm text-gray-600 mt-1">' +
+                      '<i class="fas fa-folder mr-1"></i>' + t.area + ' · ' + t.subarea +
+                    '</p>' +
+                    '<p class="text-xs text-gray-500 mt-1">' + (t.subtopicos || '') + '</p>' +
+                    '<div class="flex items-center mt-2 space-x-3">' +
+                      '<span class="text-xs px-2 py-1 rounded ' + prevClass + '">' + t.prevalencia + '</span>' +
+                      '<span class="text-xs text-gray-600">' +
+                        '<i class="fas fa-check-circle ' + statusIcon + ' mr-1"></i>' + statusText +
+                      '</span>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>'
+            }).join('')
             
             Modal.show({
-              title: \`Semana \${numeroSemana} - \${semana.temas.length} Temas\`,
-              content: \`
-                <div class="max-h-96 overflow-y-auto space-y-3">
-                  \${temasHTML}
-                </div>
-              \`,
+              title: 'Semana ' + numeroSemana + ' - ' + semana.temas.length + ' Temas',
+              content: '<div class="max-h-96 overflow-y-auto space-y-3">' + temasHTML + '</div>',
               type: 'info',
               buttons: [
                 { label: 'Fechar', primary: true, callback: () => {} }
