@@ -1065,9 +1065,112 @@ app.post('/api/config', async (c) => {
 })
 
 // ====================================================
-// FRONTEND: PÁGINA PRINCIPAL (PROTEGIDA)
+// FRONTEND: LANDING PAGE
 // ====================================================
 app.get('/', async (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HardMed - Sistema Inteligente de Estudos ENARE 2026</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+            @keyframes float {
+                0%, 100% { transform: translateY(0px); }
+                50% { transform: translateY(-20px); }
+            }
+            .float-animation {
+                animation: float 3s ease-in-out infinite;
+            }
+        </style>
+    </head>
+    <body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 min-h-screen">
+        <!-- Hero Section -->
+        <div class="container mx-auto px-4 py-16">
+            <!-- Header -->
+            <div class="text-center mb-16">
+                <div class="inline-block bg-white bg-opacity-10 backdrop-blur-sm p-6 rounded-3xl mb-6 float-animation">
+                    <i class="fas fa-brain text-white text-7xl"></i>
+                </div>
+                <h1 class="text-6xl md:text-7xl font-bold text-white mb-4">
+                    HardMed
+                </h1>
+                <p class="text-2xl md:text-3xl text-purple-200 mb-2">
+                    Sistema Inteligente de Estudos
+                </p>
+                <p class="text-xl text-purple-300">
+                    ENARE 2026
+                </p>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="grid md:grid-cols-3 gap-8 mb-16">
+                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
+                    <div class="text-5xl mb-4">🎯</div>
+                    <h3 class="text-2xl font-bold text-white mb-3">419 Temas</h3>
+                    <p class="text-purple-200">Baseados em editais anteriores do ENARE, organizados por prevalência e prioridade.</p>
+                </div>
+                
+                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
+                    <div class="text-5xl mb-4">🔄</div>
+                    <h3 class="text-2xl font-bold text-white mb-3">Revisões Inteligentes</h3>
+                    <p class="text-purple-200">Sistema de espaçamento repetido (1, 7, 30 dias) para fixação eficiente.</p>
+                </div>
+                
+                <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-8 hover:bg-opacity-20 transition">
+                    <div class="text-5xl mb-4">📊</div>
+                    <h3 class="text-2xl font-bold text-white mb-3">Métricas Detalhadas</h3>
+                    <p class="text-purple-200">Acompanhe seu progresso, acurácia, tempo de estudo e evolução semanal.</p>
+                </div>
+            </div>
+
+            <!-- CTA -->
+            <div class="text-center">
+                <a href="/login" class="inline-block bg-white text-purple-900 px-12 py-4 rounded-full text-xl font-bold hover:bg-purple-100 transition shadow-2xl hover:shadow-purple-500/50 hover:scale-105 transform">
+                    <i class="fas fa-rocket mr-2"></i>Começar Agora
+                </a>
+                <p class="text-purple-200 mt-6">
+                    Já tem uma conta? <a href="/login" class="text-white font-bold underline hover:text-purple-200">Fazer login</a>
+                </p>
+            </div>
+
+            <!-- Stats -->
+            <div class="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-white mb-2">419</div>
+                    <div class="text-purple-200 text-sm">Temas Médicos</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-white mb-2">40</div>
+                    <div class="text-purple-200 text-sm">Semanas de Ciclo</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-white mb-2">3</div>
+                    <div class="text-purple-200 text-sm">Níveis de Revisão</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-white mb-2">∞</div>
+                    <div class="text-purple-200 text-sm">Possibilidades</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center py-6 text-purple-300 text-sm">
+            <p>Criado com muito <span class="text-red-400">❤️</span> por <strong>Erique Melo</strong> e muito ☕</p>
+        </footer>
+    </body>
+    </html>
+  `)
+})
+
+// ====================================================
+// FRONTEND: DASHBOARD (PROTEGIDA)
+// ====================================================
+app.get('/dashboard', async (c) => {
   const auth = await requireAuth(c)
   if (auth.error) {
     return c.redirect('/login')
@@ -1081,7 +1184,7 @@ app.get('/', async (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🧠 Cérebro de Estudos HardMed</title>
+        <title>Home - ${nomeUsuario}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -2508,6 +2611,11 @@ app.get('/', async (c) => {
         \`
         document.head.appendChild(style)
         </script>
+
+        <!-- Footer -->
+        <footer class="text-center py-6 mt-12 text-gray-600 dark:text-gray-400 text-sm">
+            <p>Criado com muito <span class="text-red-500">❤️</span> por <strong>Erique Melo</strong> e muito ☕</p>
+        </footer>
     </body>
     </html>
   `)
@@ -2851,16 +2959,8 @@ app.get('/home', (c) => {
         </div>
 
         <!-- Footer -->
-        <footer class="bg-gray-900 text-white py-12 px-4">
-            <div class="max-w-6xl mx-auto text-center">
-                <div class="mb-6">
-                    <i class="fas fa-brain text-5xl text-indigo-400 mb-4"></i>
-                </div>
-                <p class="text-gray-400 mb-4">© 2025 Cérebro HardMed. Sistema inteligente de estudos para ENARE.</p>
-                <p class="text-gray-500 text-sm">
-                    <i class="fas fa-code mr-2"></i>Desenvolvido com Hono + Cloudflare + IA
-                </p>
-            </div>
+        <footer class="text-center py-6 mt-12 text-gray-400 text-sm">
+            <p>Criado com muito <span class="text-red-500">❤️</span> por <strong>Erique Melo</strong> e muito ☕</p>
         </footer>
     </body>
     </html>
@@ -3007,7 +3107,7 @@ app.get('/login', (c) => {
                 if (data.success) {
                     document.cookie = \`auth_token=\${data.token}; path=/; max-age=2592000\`
                     mostrarMensagem('Login realizado! Redirecionando...', 'sucesso')
-                    setTimeout(() => window.location.href = '/', 1000)
+                    setTimeout(() => window.location.href = '/dashboard', 1000)
                 } else {
                     mostrarMensagem(data.error || 'Erro ao fazer login', 'erro')
                 }
@@ -3041,7 +3141,7 @@ app.get('/login', (c) => {
                 if (data.success) {
                     document.cookie = \`auth_token=\${data.token}; path=/; max-age=2592000\`
                     mostrarMensagem('Conta criada! Redirecionando...', 'sucesso')
-                    setTimeout(() => window.location.href = '/', 1000)
+                    setTimeout(() => window.location.href = '/dashboard', 1000)
                 } else {
                     mostrarMensagem(data.error || 'Erro ao criar conta', 'erro')
                 }
@@ -3095,7 +3195,7 @@ app.get('/admin', async (c) => {
                         </div>
                     </div>
                     <div class="flex items-center space-x-4">
-                        <a href="/" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-white transition">
+                        <a href="/dashboard" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-white transition">
                             <i class="fas fa-home mr-2"></i>Voltar ao Sistema
                         </a>
                         <button onclick="logout()" class="bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg text-white transition">
@@ -3229,22 +3329,46 @@ app.get('/admin', async (c) => {
                 document.getElementById('admin-total-estudos').textContent = data.total_estudos || 0
                 
                 document.getElementById('admin-stats').innerHTML = \`
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                         <div class="border-l-4 border-indigo-500 pl-4">
-                            <p class="text-gray-600 text-sm">Usuários Ativos (últimos 7 dias)</p>
+                            <p class="text-gray-600 text-sm">Usuários Ativos (7 dias)</p>
                             <p class="text-2xl font-bold">\${data.usuarios_ativos_7d || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-blue-500 pl-4">
+                            <p class="text-gray-600 text-sm">Usuários Ativos (30 dias)</p>
+                            <p class="text-2xl font-bold">\${data.usuarios_ativos_30d || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-cyan-500 pl-4">
+                            <p class="text-gray-600 text-sm">Novos Usuários (7 dias)</p>
+                            <p class="text-2xl font-bold">\${data.novos_usuarios_7d || 0}</p>
                         </div>
                         <div class="border-l-4 border-green-500 pl-4">
                             <p class="text-gray-600 text-sm">Estudos Hoje</p>
                             <p class="text-2xl font-bold">\${data.estudos_hoje || 0}</p>
                         </div>
+                        <div class="border-l-4 border-orange-500 pl-4">
+                            <p class="text-gray-600 text-sm">Questões Resolvidas</p>
+                            <p class="text-2xl font-bold">\${data.questoes_total || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-yellow-500 pl-4">
+                            <p class="text-gray-600 text-sm">Tempo Total de Estudo</p>
+                            <p class="text-2xl font-bold">\${Math.floor((data.tempo_estudo_total || 0) / 60)}h</p>
+                        </div>
                         <div class="border-l-4 border-purple-500 pl-4">
                             <p class="text-gray-600 text-sm">Revisões Pendentes</p>
                             <p class="text-2xl font-bold">\${data.revisoes_pendentes || 0}</p>
                         </div>
-                        <div class="border-l-4 border-orange-500 pl-4">
-                            <p class="text-gray-600 text-sm">Questões Resolvidas (Total)</p>
-                            <p class="text-2xl font-bold">\${data.questoes_total || 0}</p>
+                        <div class="border-l-4 border-pink-500 pl-4">
+                            <p class="text-gray-600 text-sm">Revisões Concluídas</p>
+                            <p class="text-2xl font-bold">\${data.revisoes_concluidas || 0}</p>
+                        </div>
+                        <div class="border-l-4 border-red-500 pl-4">
+                            <p class="text-gray-600 text-sm">Acurácia Média Geral</p>
+                            <p class="text-2xl font-bold">\${(data.acuracia_media_geral || 0).toFixed(1)}%</p>
+                        </div>
+                        <div class="border-l-4 border-teal-500 pl-4">
+                            <p class="text-gray-600 text-sm">Temas Estudados</p>
+                            <p class="text-2xl font-bold">\${data.temas_estudados || 0} / \${data.total_temas || 0}</p>
                         </div>
                     </div>
                 \`
@@ -3355,6 +3479,11 @@ app.get('/admin', async (c) => {
             // Load initial
             loadAdminOverview()
         </script>
+
+        <!-- Footer -->
+        <footer class="text-center py-6 mt-12 text-gray-600 text-sm">
+            <p>Criado com muito <span class="text-red-500">❤️</span> por <strong>Erique Melo</strong> e muito ☕</p>
+        </footer>
     </body>
     </html>
   `)
@@ -3379,7 +3508,13 @@ app.get('/api/admin/stats', async (c) => {
         (SELECT COUNT(*) FROM estudos WHERE data_estudo = ?) as estudos_hoje,
         (SELECT COALESCE(SUM(questoes_feitas), 0) FROM estudos) as questoes_total,
         (SELECT COUNT(*) FROM revisoes WHERE concluida = 0) as revisoes_pendentes,
-        (SELECT COUNT(DISTINCT usuario_id) FROM estudos WHERE data_estudo >= date('now', '-7 days')) as usuarios_ativos_7d
+        (SELECT COUNT(DISTINCT usuario_id) FROM estudos WHERE data_estudo >= date('now', '-7 days')) as usuarios_ativos_7d,
+        (SELECT COALESCE(AVG(acuracia), 0) FROM estudos WHERE acuracia > 0) as acuracia_media_geral,
+        (SELECT COALESCE(SUM(tempo_minutos), 0) FROM estudos) as tempo_estudo_total,
+        (SELECT COUNT(DISTINCT tema_id) FROM estudos) as temas_estudados,
+        (SELECT COUNT(*) FROM revisoes WHERE concluida = 1) as revisoes_concluidas,
+        (SELECT COUNT(*) FROM usuarios WHERE last_login >= date('now', '-30 days')) as usuarios_ativos_30d,
+        (SELECT COUNT(*) FROM usuarios WHERE created_at >= date('now', '-7 days')) as novos_usuarios_7d
     `).bind(hoje).first()
 
     return c.json(stats)
