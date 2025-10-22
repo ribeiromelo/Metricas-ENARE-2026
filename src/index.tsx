@@ -1150,12 +1150,12 @@ app.get('/', async (c) => {
                     <!-- Actions: Admin + Theme + User -->
                     <div class="flex items-center space-x-3">
                         <!-- Botão Admin (condicional) -->
-                        ${auth.usuario.is_admin ? \`
+                        ${auth.usuario.is_admin ? `
                         <a href="/admin" 
                            class="bg-white bg-opacity-20 backdrop-blur-sm hover:bg-opacity-30 px-4 py-2 rounded-lg transition text-white font-semibold text-sm border border-white border-opacity-30">
                             <i class="fas fa-shield-alt mr-2"></i>Admin
                         </a>
-                        \` : ''}
+                        ` : ''}
                         
                         <!-- Botão Theme -->
                         <button onclick="toggleTheme()" 
