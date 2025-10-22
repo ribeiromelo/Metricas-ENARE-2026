@@ -575,19 +575,25 @@ app.get('/api/metricas', async (c) => {
   try {
     const hoje = getDataISOBrasil()
 
-    // ============ MÉTRICAS BÁSICAS ============
+    // ============ MÉTRICAS BÁSICAS (OTIMIZADO - SINGLE QUERY) ============
     
-    // Total de estudos
-    const totalEstudos = await DB.prepare('SELECT COUNT(*) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
-
-    // Total de questões feitas
-    const totalQuestoes = await DB.prepare('SELECT SUM(questoes_feitas) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
-
-    // Horas totais de estudo
-    const horasTotais = await DB.prepare('SELECT SUM(tempo_minutos) as total FROM estudos WHERE usuario_id = ?').bind(usuarioId).first()
-
-    // Acurácia média geral
-    const acuraciaMedia = await DB.prepare('SELECT AVG(acuracia) as media FROM estudos WHERE acuracia > 0 AND usuario_id = ?').bind(usuarioId).first()
+    // Combinar métricas básicas em uma única query
+    const metricasBasicas = await DB.prepare(`
+      SELECT 
+        COUNT(*) as total_estudos,
+        COALESCE(SUM(questoes_feitas), 0) as total_questoes,
+        COALESCE(SUM(tempo_minutos), 0) as tempo_total_minutos,
+        COALESCE(AVG(CASE WHEN acuracia > 0 THEN acuracia ELSE NULL END), 0) as acuracia_media,
+        COUNT(DISTINCT data_estudo) as dias_com_estudo
+      FROM estudos 
+      WHERE usuario_id = ?
+    `).bind(usuarioId).first()
+    
+    const totalEstudos = { total: metricasBasicas?.total_estudos || 0 }
+    const totalQuestoes = { total: metricasBasicas?.total_questoes || 0 }
+    const horasTotais = { total: metricasBasicas?.tempo_total_minutos || 0 }
+    const acuraciaMedia = { media: metricasBasicas?.acuracia_media || 0 }
+    const diasComEstudo = { dias: metricasBasicas?.dias_com_estudo || 0 }
 
     // ============ STREAK E CONSISTÊNCIA ============
     
@@ -617,44 +623,30 @@ app.get('/api/metricas', async (c) => {
       }
     }
 
-    // Média de questões por dia
-    const diasComEstudo = await DB.prepare(`
-      SELECT COUNT(DISTINCT data_estudo) as dias FROM estudos WHERE usuario_id = ?
-    `).bind(usuarioId).first()
+    // Média de questões por dia (já calculada acima em metricasBasicas)
     const mediaDiaria = diasComEstudo?.dias > 0 ? (totalQuestoes?.total || 0) / diasComEstudo.dias : 0
 
-    // ============ REVISÕES ============
+    // ============ REVISÕES (OTIMIZADO - SINGLE QUERY) ============
     
-    // Revisões pendentes
-    const revisoesPendentes = await DB.prepare(`
-      SELECT COUNT(*) as total FROM revisoes r
+    // Combinar todas as métricas de revisão em uma única query
+    const metricasRevisoes = await DB.prepare(`
+      SELECT 
+        COUNT(CASE WHEN r.concluida = 0 AND r.data_agendada <= ? THEN 1 END) as pendentes,
+        COUNT(CASE WHEN r.concluida = 1 THEN 1 END) as concluidas,
+        COUNT(CASE WHEN r.concluida = 1 AND r.acuracia_revisao >= 70 THEN 1 END) as com_sucesso,
+        COUNT(CASE WHEN r.concluida = 0 AND r.data_agendada < ? THEN 1 END) as atrasadas
+      FROM revisoes r
       INNER JOIN estudos e ON r.estudo_id = e.id
-      WHERE r.concluida = 0 AND r.data_agendada <= ? AND e.usuario_id = ?
-    `).bind(hoje, usuarioId).first()
-
-    // Total de revisões concluídas
-    const revisoesConcluidas = await DB.prepare(`
-      SELECT COUNT(*) as total FROM revisoes r
-      INNER JOIN estudos e ON r.estudo_id = e.id
-      WHERE r.concluida = 1 AND e.usuario_id = ?
-    `).bind(usuarioId).first()
-
-    // Taxa de sucesso em revisões (>70%)
-    const revisoesComSucesso = await DB.prepare(`
-      SELECT COUNT(*) as total FROM revisoes r
-      INNER JOIN estudos e ON r.estudo_id = e.id
-      WHERE r.concluida = 1 AND r.acuracia_revisao >= 70 AND e.usuario_id = ?
-    `).bind(usuarioId).first()
+      WHERE e.usuario_id = ?
+    `).bind(hoje, hoje, usuarioId).first()
+    
+    const revisoesPendentes = { total: metricasRevisoes?.pendentes || 0 }
+    const revisoesConcluidas = { total: metricasRevisoes?.concluidas || 0 }
+    const revisoesComSucesso = { total: metricasRevisoes?.com_sucesso || 0 }
+    const revisoesAtrasadas = { total: metricasRevisoes?.atrasadas || 0 }
     const taxaSucessoRevisoes = (revisoesConcluidas?.total || 0) > 0 
       ? ((revisoesComSucesso?.total || 0) / revisoesConcluidas.total) * 100 
       : 0
-
-    // Revisões em atraso
-    const revisoesAtrasadas = await DB.prepare(`
-      SELECT COUNT(*) as total FROM revisoes r
-      INNER JOIN estudos e ON r.estudo_id = e.id
-      WHERE r.concluida = 0 AND r.data_agendada < ? AND e.usuario_id = ?
-    `).bind(hoje, usuarioId).first()
 
     // ============ ANÁLISE POR ÁREA ============
     
@@ -727,25 +719,19 @@ app.get('/api/metricas', async (c) => {
       LIMIT 10
     `).bind(usuarioId).all()
 
-    // ============ PROGRESSO DO CICLO ============
+    // ============ PROGRESSO DO CICLO (OTIMIZADO - SINGLE QUERY) ============
     
-    // Total de semanas no ciclo
-    const totalSemanas = await DB.prepare(`
-      SELECT COUNT(*) as total FROM semanas WHERE usuario_id = ?
-    `).bind(usuarioId).first()
-
-    // Temas totais do ciclo
-    const temasTotaisCiclo = await DB.prepare(`
-      SELECT COUNT(*) as total FROM semana_temas st
-      INNER JOIN semanas s ON st.semana_id = s.id
-      WHERE s.usuario_id = ?
-    `).bind(usuarioId).first()
-
-    // Temas já estudados
-    const temasEstudados = await DB.prepare(`
-      SELECT COUNT(DISTINCT tema_id) as total FROM estudos WHERE usuario_id = ?
-    `).bind(usuarioId).first()
-
+    const progressoCiclo = await DB.prepare(`
+      SELECT 
+        (SELECT COUNT(*) FROM semanas WHERE usuario_id = ?) as total_semanas,
+        (SELECT COUNT(*) FROM semana_temas st INNER JOIN semanas s ON st.semana_id = s.id WHERE s.usuario_id = ?) as temas_total_ciclo,
+        (SELECT COUNT(DISTINCT tema_id) FROM estudos WHERE usuario_id = ?) as temas_estudados
+    `).bind(usuarioId, usuarioId, usuarioId).first()
+    
+    const totalSemanas = { total: progressoCiclo?.total_semanas || 0 }
+    const temasTotaisCiclo = { total: progressoCiclo?.temas_total_ciclo || 0 }
+    const temasEstudados = { total: progressoCiclo?.temas_estudados || 0 }
+    
     const percentualConclusao = (temasTotaisCiclo?.total || 0) > 0 
       ? ((temasEstudados?.total || 0) / temasTotaisCiclo.total) * 100 
       : 0
